@@ -8,7 +8,7 @@ snapshots and a documented mock payment flow.**
 | **Project** | Smart E-Commerce Marketplace |
 | **Student** | Joelle Rukomeza |
 | **Stack** | Django 6.1 · PostgreSQL / SQLite · HTML/CSS/JS · Chart.js · Gunicorn · Render |
-| **Repository** | `smart-ecommerce-marketplace/` (Git) |
+| **Repository** | <https://github.com/joelleruk-lab/smart-ecommerce-marketplace> |
 | **Live URL** | `https://[your-service].onrender.com` — see §9 and `docs/DEPLOYMENT.md` |
 | **Date** | November 2026 |
 
@@ -504,9 +504,11 @@ Environment variables (full table in `docs/DEPLOYMENT.md`):
 
 ### 11.3 Reproducing the deployment
 
-1. Push the repository to GitHub.
+1. Push the repository to GitHub (already published at
+   <https://github.com/joelleruk-lab/smart-ecommerce-marketplace>).
 2. In Render: **New → Blueprint**, select the repository; `render.yaml` creates
-   the web service and PostgreSQL.
+   the web service and PostgreSQL. The one-click URL is
+   <https://render.com/deploy?repo=https://github.com/joelleruk-lab/smart-ecommerce-marketplace>.
 3. Add `DATABASE_URL` if you use Neon instead of Render Postgres.
 4. Deploy and open `/healthz`.
 5. Log in with the demo accounts and run the verification checklist in

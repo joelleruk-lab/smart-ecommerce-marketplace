@@ -11,6 +11,9 @@ covers the whole order lifecycle — Pending → Paid → Shipped → Delivered 
 Cancelled — with concurrency-safe inventory, immutable price snapshots and a
 working mock payment flow.
 
+**Source code:** <https://github.com/joelleruk-lab/smart-ecommerce-marketplace>
+**One-click deploy:** <https://render.com/deploy?repo=https://github.com/joelleruk-lab/smart-ecommerce-marketplace>
+
 ---
 
 ## Feature summary
