@@ -1,5 +1,32 @@
 # Lancer le projet sur votre machine (Windows)
 
+## Méthode VS Code (recommandée)
+
+1. Ouvrez le dossier `C:\Users\HP\smart-ecommerce-marketplace` dans VS Code
+   (**File → Open Folder**).
+2. Ouvrez le terminal intégré : **Terminal → New Terminal**
+   (raccourci `Ctrl + ù` sur clavier AZERTY, `` Ctrl + ` `` sur QWERTY).
+3. Vérifiez que le prompt affiche bien le dossier du projet.
+4. Lancez les trois commandes :
+
+```powershell
+.\venv\Scripts\python.exe manage.py migrate
+.\venv\Scripts\python.exe manage.py seed_demo
+.\venv\Scripts\python.exe manage.py runserver
+```
+
+5. `Ctrl + clic` sur l’adresse `http://127.0.0.1:8000/` affichée dans le terminal.
+6. Pour arrêter : `Ctrl + C` dans le terminal.
+
+Les tâches VS Code sont déjà prêtes :
+
+* **`Ctrl + Shift + B`** exécute « Rukomeza: preparer et lancer »
+  (migrations → données de démonstration → serveur).
+* **`F5`** lance le serveur en mode débogage Python (points d’arrêt, variables).
+
+Si VS Code demande d’installer l’extension Python, acceptez
+`ms-python.python` (voir `.vscode/extensions.json`).
+
 ## Méthode la plus simple : double-clic
 
 1. Ouvrez l’Explorateur de fichiers.

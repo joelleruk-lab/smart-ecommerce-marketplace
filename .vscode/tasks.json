@@ -1,0 +1,41 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Rukomeza: preparer la base",
+      "type": "shell",
+      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "args": ["manage.py", "migrate", "--noinput"],
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+    },
+    {
+      "label": "Rukomeza: donnees de demonstration",
+      "type": "shell",
+      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "args": ["manage.py", "seed_demo"],
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "Rukomeza: demarrer le serveur",
+      "type": "shell",
+      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "args": ["manage.py", "runserver", "127.0.0.1:8000"],
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+    },
+    {
+      "label": "Rukomeza: preparer et lancer",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "Rukomeza: preparer la base",
+        "Rukomeza: donnees de demonstration",
+        "Rukomeza: demarrer le serveur"
+      ],
+      "problemMatcher": [],
+      "group": { "kind": "build", "isDefault": true }
+    }
+  ]
+}
