@@ -1,0 +1,12 @@
+{% extends 'store/base.html' %}
+{% block title %}Access denied · Rukomeza Market{% endblock %}
+{% block content %}
+  <section class="wrap page-section">
+    <div class="empty-state">
+      <span class="empty-icon">⛔</span>
+      <h1>Access denied</h1>
+      <p>This area is restricted to {% for role in required_roles %}{{ role|title }}{% if not forloop.last %}, {% endif %}{% endfor %} accounts. Your account does not have the required role.</p>
+      <a class="button button-dark" href="{% url 'home' %}">Back to the marketplace</a>
+    </div>
+  </section>
+{% endblock %}

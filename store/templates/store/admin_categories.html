@@ -1,0 +1,43 @@
+{% extends 'store/base.html' %}
+{% block title %}Categories · Admin · Rukomeza Market{% endblock %}
+{% block content %}
+  <section class="wrap page-section">
+    <div class="admin-head">
+      <div class="page-title"><span class="eyebrow">CATALOGUE</span><h1>Categories</h1><p>Departments shown to customers. Categories with products cannot be deleted.</p></div>
+      <div class="admin-nav">
+        <a class="chip" href="{% url 'admin_dashboard' %}">Overview</a>
+        <a class="chip chip-active" href="{% url 'admin_categories' %}">Categories</a>
+        <a class="chip" href="{% url 'admin_orders' %}">Orders</a>
+      </div>
+    </div>
+    <div class="studio-grid">
+      <div class="panel">
+        <div class="panel-head"><h2>Create a category</h2></div>
+        <form method="post" class="stacked-form">
+          {% csrf_token %}
+          {% for field in form %}
+            <div class="field-row"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for error in field.errors %}<span class="form-error">{{ error }}</span>{% endfor %}</div>
+          {% endfor %}
+          <button class="button button-dark" type="submit">Add category</button>
+        </form>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>Existing categories</h2><span class="muted">{{ categories|length }} total</span></div>
+        {% for category in categories %}
+          <div class="category-admin-row">
+            <form method="post" action="{% url 'admin_category_edit' category.pk %}" class="category-edit-form">{% csrf_token %}
+              <span class="category-icon">{{ category.icon|default:"✦" }}</span>
+              <div class="field-row"><label for="name-{{ category.pk }}">Name</label><input id="name-{{ category.pk }}" name="name" value="{{ category.name }}" required></div>
+              <div class="field-row"><label for="icon-{{ category.pk }}">Icon</label><input id="icon-{{ category.pk }}" name="icon" value="{{ category.icon }}" maxlength="16"></div>
+              <input type="hidden" name="description" value="{{ category.description }}">
+              <label class="check-field"><input type="checkbox" name="is_active" {% if category.is_active %}checked{% endif %}> Active</label>
+              <span class="muted">{{ category.product_count }} product{{ category.product_count|pluralize }}</span>
+              <button class="button button-outline button-small" type="submit">Save</button>
+            </form>
+            <form method="post" action="{% url 'admin_category_delete' category.pk %}">{% csrf_token %}<button class="text-button" type="submit" onclick="return confirm('Delete {{ category.name }}?')">Delete</button></form>
+          </div>
+        {% empty %}<p class="muted">No categories yet.</p>{% endfor %}
+      </div>
+    </div>
+  </section>
+{% endblock %}

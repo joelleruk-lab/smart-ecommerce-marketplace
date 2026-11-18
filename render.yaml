@@ -1,0 +1,39 @@
+# Render blueprint: web service + managed PostgreSQL.
+# Import this repository in Render, or create the resources manually and copy
+# the environment variables from docs/DEPLOYMENT.md.
+databases:
+  - name: rukomeza-db
+    databaseName: rukomeza
+    user: rukomeza
+    plan: free
+    region: frankfurt
+
+services:
+  - type: web
+    name: rukomeza-market
+    runtime: python
+    plan: free
+    region: frankfurt
+    buildCommand: bash build.sh
+    startCommand: gunicorn marketplace_project.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13.5"
+      - key: DJANGO_DEBUG
+        value: "False"
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DJANGO_ALLOWED_HOSTS
+        value: ".onrender.com"
+      - key: MOCK_GATEWAY_SECRET
+        generateValue: true
+      - key: SEED_DEMO
+        value: "true"
+      - key: WEB_CONCURRENCY
+        value: "2"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: rukomeza-db
+          property: connectionString

@@ -1,0 +1,75 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Rukomeza Market — Kampala's multi-vendor marketplace for local shops.">
+  <title>{% block title %}Rukomeza Market{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'css/marketplace.css' %}">
+  <link rel="stylesheet" href="{% static 'css/marketplace_ext.css' %}">
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+  <div class="topline">Kampala's marketplace for local finds <span>•</span> Pay online in test mode <span>•</span> Verified-buyer reviews</div>
+  <header class="site-header">
+    <div class="header-row wrap">
+      <a class="brand" href="{% url 'home' %}" aria-label="Rukomeza Market home">
+        <span class="brand-mark">R</span><span>Rukomeza<span class="brand-accent"> Market</span></span>
+      </a>
+      <form class="header-search" action="{% url 'shop' %}" method="get">
+        <label class="sr-only" for="header-q">Search products and stores</label>
+        <input id="header-q" type="search" name="q" value="{{ request.GET.q }}" placeholder="Search products, stores...">
+        <button type="submit" aria-label="Search">Search</button>
+      </form>
+      <div class="header-actions">
+        {% if user.is_authenticated %}
+          {% if current_seller %}<a href="{% url 'seller_dashboard' %}">Seller studio</a>{% endif %}
+          {% if is_admin_user %}<a href="{% url 'admin_dashboard' %}">Admin</a>{% endif %}
+          <a href="{% url 'account' %}">Hi, {{ user.first_name|default:user.username }}</a>
+          <form action="{% url 'logout' %}" method="post" class="inline-form">{% csrf_token %}<button class="text-button" type="submit">Sign out</button></form>
+        {% else %}
+          <a href="{% url 'login' %}">Sign in</a>
+          <a class="header-join" href="{% url 'register' %}">Join</a>
+        {% endif %}
+        <a class="basket-link" href="{% url 'cart' %}">Basket <span>{{ cart_count }}</span></a>
+      </div>
+    </div>
+    <nav class="main-nav">
+      <div class="wrap nav-row">
+        <a href="{% url 'shop' %}">Shop all</a>
+        {% for category in nav_categories %}<a href="{% url 'shop' %}?category={{ category.slug|urlencode }}">{{ category.name }}</a>{% endfor %}
+        <a href="{% url 'about' %}">How it works</a>
+        <a href="{% url 'contact' %}">Contact</a>
+        {% if is_admin_user %}<a href="{% url 'admin_reports' %}">Reports</a>{% endif %}
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    {% if messages %}
+      <div class="wrap message-stack" aria-live="polite">
+        {% for message in messages %}<div class="notice notice-{{ message.tags }}">{{ message }}</div>{% endfor %}
+      </div>
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap footer-row">
+      <div>
+        <a class="brand footer-brand" href="{% url 'home' %}"><span class="brand-mark">R</span><span>Rukomeza<span class="brand-accent"> Market</span></span></a>
+        <p>Local sellers. Everyday essentials. One easy marketplace.</p>
+      </div>
+      <div class="footer-links">
+        <a href="{% url 'shop' %}">Shop</a>
+        <a href="{% url 'about' %}">How it works</a>
+        <a href="{% url 'register' %}">Become a seller</a>
+        <a href="{% url 'api_docs' %}">API docs</a>
+      </div>
+      <small>© {% now "Y" %} Rukomeza Market · Kampala, Uganda · Test-mode payments</small>
+    </div>
+  </footer>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

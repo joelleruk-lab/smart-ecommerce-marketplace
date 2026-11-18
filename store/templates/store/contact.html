@@ -1,0 +1,28 @@
+{% extends 'store/base.html' %}
+{% block title %}Contact · Rukomeza Market{% endblock %}
+{% block content %}
+  <section class="wrap page-section">
+    <div class="page-title"><span class="eyebrow">WE ARE HERE TO HELP</span><h1>Contact our team</h1><p>Questions about an order, a store or a review? Start here.</p></div>
+    <div class="contact-grid">
+      <div class="panel">
+        <h2>Marketplace support</h2>
+        <p>Kampala, Uganda<br>Monday to Saturday, 8:00 – 18:00 EAT</p>
+        <dl class="detail-list">
+          <dt>Customers</dt><dd>support@rukomeza.test</dd>
+          <dt>Sellers</dt><dd>sellers@rukomeza.test</dd>
+          <dt>Phone</dt><dd>+256 700 000 000</dd>
+        </dl>
+        <p class="muted">This is an academic project; email addresses are illustrative.</p>
+      </div>
+      <div class="panel">
+        <h2>Order problems</h2>
+        <p>If something is wrong with a paid order, open a dispute from the order page. An administrator reviews every case and records the resolution.</p>
+        <a class="button button-dark" href="{% url 'account' %}">Go to my orders</a>
+        <h3 class="contact-subhead">Common questions</h3>
+        <details><summary>How do I pay?</summary><p>Checkout uses a test-mode mock gateway. No real money is charged.</p></details>
+        <details><summary>When is stock reserved?</summary><p>Stock is checked and decremented atomically when the order is placed, inside one database transaction.</p></details>
+        <details><summary>Can I review without buying?</summary><p>No. Reviews require a paid order containing the product.</p></details>
+      </div>
+    </div>
+  </section>
+{% endblock %}

@@ -1,0 +1,41 @@
+{% extends 'store/base.html' %}
+{% block title %}My orders · Rukomeza Market{% endblock %}
+{% block content %}
+  <section class="wrap page-section">
+    <div class="page-title"><span class="eyebrow">YOUR RUKOMEZA</span><h1>Hello, {{ user.first_name|default:user.username }}</h1><p>{{ user.get_role_display }} account · manage orders, payments and disputes.</p></div>
+    <div class="quick-actions">
+      {% if user.role == 'SELLER' %}<a class="button button-outline" href="{% url 'seller_dashboard' %}">Open seller studio →</a>{% endif %}
+      {% if is_admin_user %}<a class="button button-outline" href="{% url 'admin_dashboard' %}">Admin dashboard →</a>{% endif %}
+      <a class="button button-outline" href="{% url 'shop' %}">Continue shopping →</a>
+    </div>
+
+    <div class="section-heading account-heading"><div><span class="eyebrow">ORDER HISTORY</span><h2>Your orders</h2></div><span class="muted">{{ orders|length }} order{{ orders|length|pluralize }}</span></div>
+    {% for order in orders %}
+      <article class="order-card">
+        <div class="order-heading">
+          <div><strong>Order {{ order.reference }}</strong><span>{{ order.created_at|date:"M j, Y · g:i a" }} · {{ order.item_count }} item{{ order.item_count|pluralize }}</span></div>
+          <span class="status-badge status-{{ order.status|lower }}">{{ order.get_status_display }}</span>
+        </div>
+        <div class="order-products">{% for item in order.items.all %}<span>{{ item.quantity }} × {{ item.product_name_snapshot }} <em>UGX {{ item.line_total|floatformat:0 }}</em></span>{% endfor %}</div>
+        <div class="order-total"><span>Total</span><strong>UGX {{ order.total_amount|floatformat:0 }}</strong></div>
+        <div class="order-card-actions">
+          <a class="subtle-link" href="{% url 'order_detail' order.pk %}">Track order →</a>
+          {% if order.status == 'PENDING' %}<a class="subtle-link" href="{% url 'payment_page' order.pk %}">Pay now →</a>{% endif %}
+          {% if order.can_be_cancelled %}
+            <form action="{% url 'order_cancel' order.pk %}" method="post" class="inline-form">{% csrf_token %}<button class="text-button" type="submit" onclick="return confirm('Cancel this order and return the stock?')">Cancel</button></form>
+          {% endif %}
+        </div>
+        {% if order.payment %}<p class="payment-note">Payment: {{ order.payment.get_status_display }} · {{ order.payment.transaction_ref }}</p>{% endif %}
+      </article>
+    {% empty %}
+      <div class="empty-state"><h3>No orders yet</h3><p>Your first local-market find is just around the corner.</p><a class="button button-dark" href="{% url 'shop' %}">Start shopping</a></div>
+    {% endfor %}
+
+    {% if disputes %}
+      <div class="section-heading account-heading"><div><span class="eyebrow">SUPPORT</span><h2>Your disputes</h2></div></div>
+      {% for dispute in disputes %}
+        <div class="list-row"><div><strong>{{ dispute.order.reference }} · {{ dispute.get_reason_display }}</strong><span class="muted">{{ dispute.created_at|date:"M j, Y" }}</span></div><span class="status-badge status-{{ dispute.status|lower }}">{{ dispute.get_status_display }}</span></div>
+      {% endfor %}
+    {% endif %}
+  </section>
+{% endblock %}

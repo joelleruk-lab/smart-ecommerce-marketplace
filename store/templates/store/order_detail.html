@@ -1,0 +1,139 @@
+{% extends 'store/base.html' %}
+{% block title %}Order {{ order.reference }} · Rukomeza Market{% endblock %}
+{% block content %}
+  <div class="wrap breadcrumb"><a href="{% url 'account' %}">My orders</a><span> / </span>{{ order.reference }}</div>
+  <section class="wrap page-section order-detail-section">
+    <div class="order-detail-head">
+      <div>
+        <span class="eyebrow">ORDER TRACKING</span>
+        <h1>{{ order.reference }}</h1>
+        <p class="muted">Placed {{ order.created_at|date:"M j, Y · g:i a" }} · {{ order.item_count }} item{{ order.item_count|pluralize }} · UGX {{ order.total_amount|floatformat:0 }}</p>
+      </div>
+      <div class="order-detail-status">
+        <span class="status-badge status-{{ order.status|lower }}">{{ order.get_status_display }}</span>
+        {% if order.status == 'PENDING' and not is_seller_view %}<a class="button button-dark" href="{% url 'payment_page' order.pk %}">Pay now</a>{% endif %}
+      </div>
+    </div>
+
+    <ol class="timeline" aria-label="Order progress">
+      {% for step in timeline %}
+        <li class="timeline-step timeline-{{ step.state }}">
+          <span class="timeline-dot" aria-hidden="true">{% if step.done %}✓{% endif %}</span>
+          <div><strong>{{ step.label }}</strong><span>{% if step.date %}{{ step.date|date:"M j, Y · g:i a" }}{% else %}Pending{% endif %}</span></div>
+        </li>
+      {% endfor %}
+    </ol>
+
+    <div class="order-detail-grid">
+      <div class="order-detail-main">
+        <div class="panel">
+          <h2>Items in this order</h2>
+          <div class="table-wrap"><table class="data">
+            <thead><tr><th>Product</th><th>Seller</th><th>Qty</th><th>Unit price</th><th>Line total</th><th></th></tr></thead>
+            <tbody>
+              {% for item in items %}
+                <tr>
+                  <td><strong>{{ item.product_name_snapshot }}</strong><span class="muted">SKU {{ item.sku_snapshot }}</span></td>
+                  <td>{{ item.seller_name_snapshot }}</td>
+                  <td>{{ item.quantity }}</td>
+                  <td>UGX {{ item.unit_price_snapshot|floatformat:0 }}</td>
+                  <td>UGX {{ item.line_total|floatformat:0 }}</td>
+                  <td>{% if can_review and item.product_id %}<a class="subtle-link" href="{% url 'product_detail' item.product_id %}#reviews">Review</a>{% endif %}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table></div>
+          <div class="order-totals">
+            <div class="summary-row"><span>Subtotal</span><strong>UGX {{ order.subtotal|floatformat:0 }}</strong></div>
+            <div class="summary-row"><span>Shipping</span><strong>UGX {{ order.shipping_fee|floatformat:0 }}</strong></div>
+            <div class="summary-row summary-total"><span>Total</span><strong>UGX {{ order.total_amount|floatformat:0 }}</strong></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Status history</h2>
+          <ul class="event-list">
+            {% for event in status_events %}
+              <li><span class="event-dot"></span><div><strong>{% if event.from_status %}{{ event.from_status }} → {{ event.to_status }}{% else %}Order placed{% endif %}</strong><span>{{ event.created_at|date:"M j, Y · g:i a" }}{% if event.note %} · {{ event.note }}{% endif %}</span></div></li>
+            {% empty %}
+              <li><span class="event-dot"></span><div><strong>Order created</strong><span>{{ order.created_at|date:"M j, Y · g:i a" }}</span></div></li>
+            {% endfor %}
+          </ul>
+        </div>
+
+        {% if order.customer_id == user.pk %}
+          <div class="panel">
+            <h2>Delivery details</h2>
+            <dl class="detail-list">
+              <dt>Recipient</dt><dd>{{ order.shipping_full_name }}</dd>
+              <dt>Phone</dt><dd>{{ order.shipping_phone }}</dd>
+              <dt>Address</dt><dd>{{ order.shipping_address }}, {{ order.shipping_city }}</dd>
+            </dl>
+          </div>
+        {% endif %}
+
+        {% if can_dispute %}
+          <div class="panel">
+            <h2>Report a problem</h2>
+            <p class="muted">Open a dispute and an administrator will review the order.</p>
+            <form method="post" action="{% url 'order_dispute' order.pk %}" class="dispute-form">
+              {% csrf_token %}
+              {% for field in dispute_form %}
+                <div class="field-row"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for error in field.errors %}<span class="form-error">{{ error }}</span>{% endfor %}</div>
+              {% endfor %}
+              <button class="button button-outline" type="submit">Open dispute</button>
+            </form>
+          </div>
+        {% endif %}
+
+        {% if disputes %}
+          <div class="panel">
+            <h2>Disputes</h2>
+            {% for dispute in disputes %}
+              <div class="dispute-row">
+                <div><strong>{{ dispute.get_reason_display }}</strong><span class="muted">{{ dispute.created_at|date:"M j, Y" }} · {{ dispute.description }}</span>{% if dispute.resolution_note %}<span class="resolution-note">Resolution: {{ dispute.resolution_note }}</span>{% endif %}</div>
+                <span class="status-badge status-{{ dispute.status|lower }}">{{ dispute.get_status_display }}</span>
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      </div>
+
+      <aside class="order-detail-side">
+        <div class="panel">
+          <h2>Payment</h2>
+          {% if payment %}
+            <dl class="detail-list">
+              <dt>Status</dt><dd><span class="status-badge status-{{ payment.status|lower }}">{{ payment.get_status_display }}</span></dd>
+              <dt>Gateway</dt><dd>{{ payment.get_gateway_display }}</dd>
+              <dt>Reference</dt><dd class="mono">{{ payment.transaction_ref }}</dd>
+              <dt>Attempts</dt><dd>{{ payment.attempts }}</dd>
+              {% if payment.failure_reason %}<dt>Note</dt><dd>{{ payment.failure_reason }}</dd>{% endif %}
+              {% if payment.paid_at %}<dt>Paid</dt><dd>{{ payment.paid_at|date:"M j, Y · g:i a" }}</dd>{% endif %}
+            </dl>
+          {% else %}<p class="muted">No payment record.</p>{% endif %}
+        </div>
+        <div class="panel">
+          <h2>Shipment</h2>
+          {% if shipment %}
+            <dl class="detail-list">
+              <dt>Status</dt><dd>{{ shipment.get_status_display }}</dd>
+              <dt>Courier</dt><dd>{{ shipment.courier|default:"—" }}</dd>
+              <dt>Tracking</dt><dd class="mono">{{ shipment.tracking_number|default:"—" }}</dd>
+            </dl>
+          {% else %}<p class="muted">A shipment is created when the seller dispatches your order.</p>{% endif %}
+        </div>
+        {% if order.can_be_cancelled and order.customer_id == user.pk %}
+          <div class="panel">
+            <h2>Need to cancel?</h2>
+            <p class="muted">Cancelling before dispatch returns every item to stock immediately.</p>
+            <form action="{% url 'order_cancel' order.pk %}" method="post">{% csrf_token %}
+              <button class="button button-outline button-wide" type="submit" onclick="return confirm('Cancel this order?')">Cancel order</button>
+            </form>
+          </div>
+        {% endif %}
+        <a class="back-link" href="{% url 'account' %}">← All orders</a>
+      </aside>
+    </div>
+  </section>
+{% endblock %}

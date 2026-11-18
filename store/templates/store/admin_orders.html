@@ -1,0 +1,47 @@
+{% extends 'store/base.html' %}
+{% block title %}Orders · Admin · Rukomeza Market{% endblock %}
+{% block content %}
+  <section class="wrap page-section">
+    <div class="admin-head">
+      <div class="page-title"><span class="eyebrow">OPERATIONS</span><h1>All orders</h1><p>Dispatch, deliver or cancel orders and resolve disputes.</p></div>
+      <div class="admin-nav">
+        <a class="chip" href="{% url 'admin_dashboard' %}">Overview</a>
+        <a class="chip chip-active" href="{% url 'admin_orders' %}">Orders</a>
+        <a class="chip" href="{% url 'admin_disputes' %}">Disputes</a>
+        <a class="chip" href="{% url 'admin_reports' %}">Reports</a>
+      </div>
+    </div>
+    <form class="toolbar" method="get">
+      <input type="search" name="q" value="{{ q }}" placeholder="Reference or customer" aria-label="Search orders">
+      <select name="status" aria-label="Filter status">
+        <option value="">All statuses</option>
+        <option value="PENDING" {% if selected_status == 'PENDING' %}selected{% endif %}>Pending</option>
+        <option value="PAID" {% if selected_status == 'PAID' %}selected{% endif %}>Paid</option>
+        <option value="SHIPPED" {% if selected_status == 'SHIPPED' %}selected{% endif %}>Shipped</option>
+        <option value="DELIVERED" {% if selected_status == 'DELIVERED' %}selected{% endif %}>Delivered</option>
+        <option value="CANCELLED" {% if selected_status == 'CANCELLED' %}selected{% endif %}>Cancelled</option>
+      </select>
+      <button class="button button-dark button-small" type="submit">Filter</button>
+      <a class="subtle-link" href="{% url 'admin_orders' %}">Reset</a>
+    </form>
+    <div class="panel">
+      <div class="table-wrap"><table class="data">
+        <thead><tr><th>Reference</th><th>Customer</th><th>Items</th><th>Total</th><th>Payment</th><th>Status</th><th>Placed</th><th></th></tr></thead>
+        <tbody>
+          {% for order in orders %}
+            <tr>
+              <td><strong>{{ order.reference }}</strong></td>
+              <td>{{ order.customer.username }}</td>
+              <td>{{ order.item_count }}</td>
+              <td>UGX {{ order.total_amount|floatformat:0 }}</td>
+              <td>{% if order.payment %}<span class="status-badge status-{{ order.payment.status|lower }}">{{ order.payment.get_status_display }}</span>{% else %}—{% endif %}</td>
+              <td><span class="status-badge status-{{ order.status|lower }}">{{ order.get_status_display }}</span></td>
+              <td>{{ order.created_at|date:"M j, g:i a" }}</td>
+              <td><a class="subtle-link" href="{% url 'admin_order_detail' order.pk %}">Manage</a></td>
+            </tr>
+          {% empty %}<tr><td colspan="8" class="muted">No orders match this filter.</td></tr>{% endfor %}
+        </tbody>
+      </table></div>
+    </div>
+  </section>
+{% endblock %}

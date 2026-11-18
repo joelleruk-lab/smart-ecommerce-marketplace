@@ -1,0 +1,47 @@
+{% extends 'store/base.html' %}
+{% block title %}Users · Admin · Rukomeza Market{% endblock %}
+{% block content %}
+  <section class="wrap page-section">
+    <div class="admin-head">
+      <div class="page-title"><span class="eyebrow">PEOPLE</span><h1>Customers &amp; accounts</h1><p>Activate, deactivate or block accounts. Sellers are managed from the sellers page.</p></div>
+      <div class="admin-nav">
+        <a class="chip" href="{% url 'admin_dashboard' %}">Overview</a>
+        <a class="chip chip-active" href="{% url 'admin_users' %}">Users</a>
+        <a class="chip" href="{% url 'admin_sellers' %}">Sellers</a>
+        <a class="chip" href="{% url 'admin_orders' %}">Orders</a>
+      </div>
+    </div>
+    <form class="toolbar" method="get">
+      <input type="search" name="q" value="{{ q }}" placeholder="Search username or email" aria-label="Search users">
+      <select name="role" aria-label="Filter role">
+        <option value="">All roles</option>
+        <option value="CUSTOMER" {% if selected_role == 'CUSTOMER' %}selected{% endif %}>Customers</option>
+        <option value="SELLER" {% if selected_role == 'SELLER' %}selected{% endif %}>Sellers</option>
+        <option value="ADMIN" {% if selected_role == 'ADMIN' %}selected{% endif %}>Admins</option>
+      </select>
+      <button class="button button-dark button-small" type="submit">Filter</button>
+      <a class="subtle-link" href="{% url 'admin_users' %}">Reset</a>
+    </form>
+    <div class="panel">
+      <div class="table-wrap"><table class="data">
+        <thead><tr><th>User</th><th>Role</th><th>Joined</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody>
+          {% for account in users %}
+            <tr>
+              <td><strong>{{ account.username }}</strong><span class="muted">{{ account.email }}</span></td>
+              <td><span class="role-badge role-{{ account.role|lower }}">{{ account.get_role_display }}</span></td>
+              <td>{{ account.date_joined|date:"M j, Y" }}</td>
+              <td>{% if account.is_blocked %}<span class="status-badge status-cancelled">Blocked</span>{% elif not account.is_active %}<span class="status-badge status-cancelled">Inactive</span>{% else %}<span class="status-badge status-paid">Active</span>{% endif %}</td>
+              <td class="row-actions">
+                {% if account.pk != user.pk %}
+                  <form method="post" action="{% url 'admin_user_action' account.pk %}" class="inline-form">{% csrf_token %}<button class="text-button" name="action" value="toggle_active" type="submit">{% if account.is_active %}Deactivate{% else %}Activate{% endif %}</button></form>
+                  <form method="post" action="{% url 'admin_user_action' account.pk %}" class="inline-form">{% csrf_token %}<button class="text-button" name="action" value="toggle_blocked" type="submit">{% if account.is_blocked %}Unblock{% else %}Block{% endif %}</button></form>
+                {% else %}<span class="muted">You</span>{% endif %}
+              </td>
+            </tr>
+          {% empty %}<tr><td colspan="5" class="muted">No accounts match this filter.</td></tr>{% endfor %}
+        </tbody>
+      </table></div>
+    </div>
+  </section>
+{% endblock %}

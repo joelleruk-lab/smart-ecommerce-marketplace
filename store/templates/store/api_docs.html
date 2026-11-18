@@ -1,0 +1,101 @@
+{% extends 'store/base.html' %}
+{% block title %}API documentation · Rukomeza Market{% endblock %}
+{% block content %}
+  <section class="wrap page-section">
+    <div class="page-title"><span class="eyebrow">DEVELOPER DOCUMENTATION</span><h1>Rukomeza REST API</h1><p>JSON over HTTPS, versioned under <code>/api/v1/</code>. The complete OpenAPI 3.1 contract is available for download.</p></div>
+    <div class="quick-actions">
+      <a class="button button-dark" href="{% url 'openapi_spec' %}">Download openapi.yaml</a>
+      <a class="button button-outline" href="{% url 'api_docs' %}#auth">Authentication</a>
+      <a class="button button-outline" href="{% url 'api_docs' %}#endpoints">Endpoints</a>
+    </div>
+
+    <div class="panel" id="auth">
+      <h2>Authentication</h2>
+      <p>Obtain an opaque bearer token from <code>POST /api/v1/auth/login</code> or <code>POST /api/v1/auth/register</code>, then send it on every protected request:</p>
+      <pre class="code-block">Authorization: Bearer &lt;token&gt;</pre>
+      <p>Tokens are stored as SHA-256 hashes, can be revoked with <code>POST /api/v1/auth/logout</code>, and are never placed in cookies. Public catalogue endpoints need no token.</p>
+      <p>Money is serialised as decimal strings (for example <code>"15000.00"</code>) to avoid floating-point rounding. Prices are always recalculated on the server.</p>
+    </div>
+
+    <div class="panel" id="endpoints">
+      <h2>Endpoints</h2>
+      <div class="table-wrap"><table class="data">
+        <thead><tr><th>Method</th><th>Path</th><th>Access</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td><span class="method post">POST</span></td><td><code>/api/v1/auth/register</code></td><td>Public</td><td>Create a customer or seller account; returns a token</td></tr>
+          <tr><td><span class="method post">POST</span></td><td><code>/api/v1/auth/login</code></td><td>Public</td><td>Exchange username/email + password for a token</td></tr>
+          <tr><td><span class="method post">POST</span></td><td><code>/api/v1/auth/logout</code></td><td>Bearer</td><td>Revoke the current token</td></tr>
+          <tr><td><span class="method get">GET</span></td><td><code>/api/v1/auth/me</code></td><td>Bearer</td><td>Current user and seller profile</td></tr>
+          <tr><td><span class="method get">GET</span></td><td><code>/api/v1/products</code></td><td>Public</td><td>Search/filter by q, category, price, seller, stock, sort; paginated</td></tr>
+          <tr><td><span class="method get">GET</span></td><td><code>/api/v1/products/{id}</code></td><td>Public</td><td>Product detail with images and recent reviews</td></tr>
+          <tr><td><span class="method get">GET</span></td><td><code>/api/v1/products/{id}/reviews</code></td><td>Public</td><td>Paginated reviews</td></tr>
+          <tr><td><span class="method post">POST</span></td><td><code>/api/v1/products/{id}/reviews/create</code></td><td>Customer</td><td>Verified-purchase review (403 if never bought)</td></tr>
+          <tr><td><span class="method get">GET</span></td><td><code>/api/v1/categories</code></td><td>Public</td><td>Active departments with product counts</td></tr>
+          <tr><td><span class="method get">GET</span></td><td><code>/api/v1/cart</code></td><td>Bearer</td><td>Cart with stock checks</td></tr>
+          <tr><td><span class="method post">POST</span></td><td><code>/api/v1/cart/items</code></td><td>Bearer</td><td>Add a product (quantity 1–99, stock enforced)</td></tr>
+          <tr><td><span class="method patch">PATCH</span></td><td><code>/api/v1/cart/items/{product_id}</code></td><td>Bearer</td><td>Change quantity (0 removes)</td></tr>
+          <tr><td><span class="method delete">DELETE</span></td><td><code>/api/v1/cart/items/{product_id}</code></td><td>Bearer</td><td>Remove a line</td></tr>
+          <tr><td><span class="method delete">DELETE</span></td><td><code>/api/v1/cart/clear</code></td><td>Bearer</td><td>Empty the cart</td></tr>
+          <tr><td><span class="method post">POST</span></td><td><code>/api/v1/orders</code></td><td>Customer</td><td>Atomic checkout + stock decrement + pending payment</td></tr>
+          <tr><td><span class="method get">GET</span></td><td><code>/api/v1/orders</code></td><td>Bearer</td><td>Own orders (sellers see orders containing their products)</td></tr>
+          <tr><td><span class="method get">GET</span></td><td><code>/api/v1/orders/{id}</code></td><td>Owner / seller / admin</td><td>Order detail with item price snapshots</td></tr>
+          <tr><td><span class="method get">GET</span></td><td><code>/api/v1/orders/{id}/tracking</code></td><td>Owner / seller / admin</td><td>Status timeline and shipment</td></tr>
+          <tr><td><span class="method post">POST</span></td><td><code>/api/v1/orders/{id}/cancel</code></td><td>Owner</td><td>Cancel and restore stock atomically</td></tr>
+          <tr><td><span class="method post">POST</span></td><td><code>/api/v1/orders/{id}/disputes</code></td><td>Owner</td><td>Open a dispute</td></tr>
+          <tr><td><span class="method get">GET</span></td><td><code>/api/v1/payments/{order_id}</code></td><td>Owner / admin</td><td>Payment status</td></tr>
+          <tr><td><span class="method post">POST</span></td><td><code>/api/v1/payments/{order_id}/pay</code></td><td>Owner / admin</td><td>Mock gateway: <code>{"outcome":"success"|"failure"}</code></td></tr>
+          <tr><td><span class="method post">POST</span></td><td><code>/api/v1/payments/webhook/mock</code></td><td>HMAC signature</td><td>Signed gateway callback by payment reference</td></tr>
+          <tr><td><span class="method get">GET</span></td><td><code>/api/v1/seller/summary</code></td><td>Seller</td><td>Own dashboard metrics</td></tr>
+          <tr><td><span class="method get">GET</span></td><td><code>/api/v1/seller/products</code></td><td>Seller</td><td>Own listings incl. inactive</td></tr>
+          <tr><td><span class="method post">POST</span></td><td><code>/api/v1/seller/products/create</code></td><td>Seller</td><td>Create listing + inventory</td></tr>
+          <tr><td><span class="method patch">PATCH</span></td><td><code>/api/v1/seller/products/{id}</code></td><td>Owner seller</td><td>Edit own listing</td></tr>
+          <tr><td><span class="method delete">DELETE</span></td><td><code>/api/v1/seller/products/{id}</code></td><td>Owner seller</td><td>Soft-deactivate listing</td></tr>
+          <tr><td><span class="method patch">PATCH</span></td><td><code>/api/v1/seller/inventory/{product_id}</code></td><td>Owner seller</td><td>Set stock or apply a delta</td></tr>
+          <tr><td><span class="method get">GET</span></td><td><code>/api/v1/seller/orders</code></td><td>Seller</td><td>Orders containing own products</td></tr>
+          <tr><td><span class="method get">GET</span></td><td><code>/api/v1/admin/users</code></td><td>Admin</td><td>List/filter accounts</td></tr>
+          <tr><td><span class="method patch">PATCH</span></td><td><code>/api/v1/admin/users/{id}</code></td><td>Admin</td><td>Activate / block account</td></tr>
+          <tr><td><span class="method get">GET</span></td><td><code>/api/v1/admin/sellers</code></td><td>Admin</td><td>Seller queue by status</td></tr>
+          <tr><td><span class="method post">POST</span></td><td><code>/api/v1/admin/sellers/{id}/action</code></td><td>Admin</td><td>approve / suspend / reinstate / reject</td></tr>
+          <tr><td><span class="method get">GET</span></td><td><code>/api/v1/admin/categories</code></td><td>Admin</td><td>All categories</td></tr>
+          <tr><td><span class="method post">POST</span></td><td><code>/api/v1/admin/categories</code></td><td>Admin</td><td>Create category</td></tr>
+          <tr><td><span class="method patch">PATCH</span></td><td><code>/api/v1/admin/categories/{id}</code></td><td>Admin</td><td>Edit category</td></tr>
+          <tr><td><span class="method delete">DELETE</span></td><td><code>/api/v1/admin/categories/{id}</code></td><td>Admin</td><td>Delete only when unused</td></tr>
+          <tr><td><span class="method get">GET</span></td><td><code>/api/v1/admin/orders</code></td><td>Admin</td><td>All orders</td></tr>
+          <tr><td><span class="method post">POST</span></td><td><code>/api/v1/admin/orders/{id}/status</code></td><td>Admin</td><td>Ship / deliver / cancel with lifecycle guard</td></tr>
+          <tr><td><span class="method get">GET</span></td><td><code>/api/v1/admin/disputes</code></td><td>Admin</td><td>Dispute queue</td></tr>
+          <tr><td><span class="method patch">PATCH</span></td><td><code>/api/v1/admin/disputes/{id}</code></td><td>Admin</td><td>Resolve/reject with note</td></tr>
+          <tr><td><span class="method get">GET</span></td><td><code>/api/v1/admin/reports/summary</code></td><td>Admin</td><td>Platform KPIs</td></tr>
+          <tr><td><span class="method get">GET</span></td><td><code>/api/v1/admin/reports/sales-per-seller</code></td><td>Admin</td><td>Seller revenue report</td></tr>
+          <tr><td><span class="method get">GET</span></td><td><code>/api/v1/admin/reports/revenue</code></td><td>Admin</td><td>Revenue by day/week/month/year</td></tr>
+          <tr><td><span class="method get">GET</span></td><td><code>/api/v1/admin/reports/best-sellers</code></td><td>Admin</td><td>Best-selling products</td></tr>
+          <tr><td><span class="method get">GET</span></td><td><code>/api/v1/admin/reports/low-stock</code></td><td>Admin</td><td>Low-stock alerts</td></tr>
+          <tr><td><span class="method get">GET</span></td><td><code>/healthz</code></td><td>Public</td><td>Deployment health check</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+    <div class="panel" id="examples">
+      <h2>Quick start</h2>
+      <pre class="code-block"># 1. Log in and keep the token
+curl -s -X POST https://YOUR-APP.onrender.com/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"amina@example.com","password":"Customer#2026"}'
+
+# 2. Add a product to the cart
+curl -s -X POST https://YOUR-APP.onrender.com/api/v1/cart/items \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"product_id": 1, "quantity": 2}'
+
+# 3. Check out (atomic stock decrement)
+curl -s -X POST https://YOUR-APP.onrender.com/api/v1/orders \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"full_name":"Amina K.","phone":"+256700000000","address":"12 Market Road","city":"Kampala","gateway":"MOCK"}'
+
+# 4. Simulate a successful payment
+curl -s -X POST https://YOUR-APP.onrender.com/api/v1/payments/1/pay \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"outcome":"success"}'</pre>
+      <p class="muted">A Postman collection is included at <code>docs/postman_collection.json</code> and the specification at <code>docs/openapi.yaml</code>.</p>
+    </div>
+  </section>
+{% endblock %}

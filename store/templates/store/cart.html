@@ -1,0 +1,42 @@
+{% extends 'store/base.html' %}
+{% block title %}Your basket · Rukomeza Market{% endblock %}
+{% block content %}
+  <section class="wrap page-section">
+    <div class="page-title"><span class="eyebrow">READY WHEN YOU ARE</span><h1>Your basket</h1></div>
+    {% if items %}
+      <div class="cart-layout">
+        <div class="cart-items">
+          {% for item in items %}
+            <article class="cart-item">
+              <a class="cart-thumb" href="{% url 'product_detail' item.product.pk %}">
+                {% if item.product.display_image_url %}<img src="{{ item.product.display_image_url }}" alt="{{ item.product.name }}">{% else %}<span>{{ item.product.category.name|first }}</span>{% endif %}
+              </a>
+              <a class="cart-product-name" href="{% url 'product_detail' item.product.pk %}"><strong>{{ item.product.name }}</strong><span>{{ item.product.seller.store_name }}</span></a>
+              <span class="cart-unit">UGX {{ item.product.price|floatformat:0 }}</span>
+              <form class="quantity-form" action="{% url 'update_cart' item.product.pk %}" method="post">{% csrf_token %}<label class="sr-only" for="quantity-{{ item.product.pk }}">Quantity</label><input id="quantity-{{ item.product.pk }}" type="number" name="quantity" min="0" max="{{ item.product.stock_quantity }}" value="{{ item.quantity }}"><button type="submit">Update</button></form>
+              <strong class="cart-line-total">UGX {{ item.line_total|floatformat:0 }}</strong>
+              <form action="{% url 'remove_from_cart' item.product.pk %}" method="post">{% csrf_token %}<button class="text-button remove-link" type="submit">Remove</button></form>
+              {% if item.quantity > item.product.stock_quantity %}<p class="form-error">Only {{ item.product.stock_quantity }} currently available. Update the quantity to continue.</p>{% endif %}
+            </article>
+          {% endfor %}
+        </div>
+        <aside class="order-summary">
+          <h2>Order summary</h2>
+          <div class="summary-row"><span>Subtotal</span><strong>UGX {{ total|floatformat:0 }}</strong></div>
+          <div class="summary-row"><span>Delivery</span><strong>{% if total %}Calculated at delivery{% endif %}</strong></div>
+          <div class="summary-row summary-total"><span>Total due</span><strong>UGX {{ total|floatformat:0 }}</strong></div>
+          <p>Pay online through the test-mode gateway at the next step. You can simulate a successful or declined payment.</p>
+          {% if has_stock_issues %}
+            <p class="form-error">Some quantities are no longer available. Update the highlighted lines first.</p>
+          {% else %}
+            <a class="button button-dark button-wide" href="{% url 'checkout' %}">Continue to checkout</a>
+          {% endif %}
+          <a class="back-link" href="{% url 'shop' %}">← Keep shopping</a>
+          <form action="{% url 'clear_cart' %}" method="post" class="inline-form">{% csrf_token %}<button class="text-button clear-basket" type="submit">Empty basket</button></form>
+        </aside>
+      </div>
+    {% else %}
+      <div class="empty-state"><span class="empty-icon">＋</span><h2>Your basket is waiting</h2><p>Find something you love from local stores.</p><a class="button button-dark" href="{% url 'shop' %}">Explore products</a></div>
+    {% endif %}
+  </section>
+{% endblock %}

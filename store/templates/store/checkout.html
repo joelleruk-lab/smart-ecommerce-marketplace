@@ -1,0 +1,39 @@
+{% extends 'store/base.html' %}
+{% block title %}Checkout · Rukomeza Market{% endblock %}
+{% block content %}
+  <section class="wrap page-section">
+    <div class="page-title"><span class="eyebrow">ALMOST THERE</span><h1>Checkout</h1><p>Prices and stock are re-checked on the server when you place the order.</p></div>
+    <div class="cart-layout">
+      <form class="form-panel checkout-form" method="post" novalidate>
+        {% csrf_token %}<h2>Delivery details</h2>
+        {% if form.non_field_errors %}<div class="form-error">{{ form.non_field_errors }}</div>{% endif %}
+        {% for field in form %}
+          <div class="field-row">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
+            {% for error in field.errors %}<span class="form-error">{{ error }}</span>{% endfor %}
+          </div>
+        {% endfor %}
+        <div class="payment-choice">
+          <span class="eyebrow">PAYMENT</span>
+          <label class="radio-card"><input type="radio" name="gateway" value="MOCK" checked> <span><strong>Mock gateway (test mode)</strong><small>Simulate a successful card charge or a decline. No real money moves.</small></span></label>
+        </div>
+        <p class="muted">By placing the order you reserve stock immediately. Payment is recorded separately so the order lifecycle stays auditable.</p>
+        {% if has_stock_issues %}
+          <p class="form-error">Some quantities are no longer available. <a href="{% url 'cart' %}">Update your basket</a> before placing the order.</p>
+        {% else %}
+          <button class="button button-dark button-wide" type="submit">Place order · UGX {{ total|floatformat:0 }}</button>
+        {% endif %}
+      </form>
+      <aside class="order-summary">
+        <h2>Order summary</h2>
+        {% for item in items %}<div class="summary-row"><span>{{ item.quantity }} × {{ item.product.name }}</span><strong>UGX {{ item.line_total|floatformat:0 }}</strong></div>{% endfor %}
+        <div class="summary-row"><span>Subtotal</span><strong>UGX {{ subtotal|floatformat:0 }}</strong></div>
+        <div class="summary-row"><span>Shipping</span><strong>{% if shipping_fee %}UGX {{ shipping_fee|floatformat:0 }}{% else %}Free{% endif %}</strong></div>
+        <div class="summary-row summary-total"><span>Total</span><strong>UGX {{ total|floatformat:0 }}</strong></div>
+        <p>Deliver to Kampala and surrounding areas. You can track every status change from your account.</p>
+      </aside>
+    </div>
+  </section>
+{% endblock %}

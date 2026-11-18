@@ -1,0 +1,98 @@
+{% extends 'store/base.html' %}
+{% load static %}
+{% block title %}{% if query %}Search “{{ query }}” · {% endif %}Rukomeza Market{% endblock %}
+{% block content %}
+  {% if not query and not selected_category and not min_price and not max_price %}
+    <section class="hero">
+      <div class="wrap hero-grid">
+        <div class="hero-copy">
+          <span class="eyebrow">YOUR NEIGHBOURHOOD, ONLINE</span>
+          <h1>Good things,<br><em>closer to home.</em></h1>
+          <p>Discover fashion, electronics, home essentials, hardware, food and more from independent Kampala sellers — with secure test-mode checkout and verified reviews.</p>
+          <a class="button button-dark" href="#marketplace">Explore the marketplace <span aria-hidden="true">→</span></a>
+          <div class="hero-proof"><span>✦</span> {{ paginator.count }} live products · {{ categories|length }} departments · 8 local stores</div>
+        </div>
+        <div class="hero-image" aria-label="Local stores gathered in one marketplace">
+          <div class="hero-art"><span class="hero-art-tag">LOCAL STORES · ONE MARKET</span><strong>Find your<br>next favourite.</strong><span class="hero-art-spark">✦</span><span class="hero-art-circle"></span></div>
+        </div>
+      </div>
+    </section>
+    <section class="wrap category-section" aria-label="Shop departments">
+      <div class="section-heading"><div><span class="eyebrow">FIND YOUR NEXT FAVOURITE</span><h2>Shop by department</h2></div><a class="subtle-link" href="{% url 'shop' %}">View all products →</a></div>
+      <div class="category-pills">
+        {% for category in categories %}<a class="category-pill" href="{% url 'shop' %}?category={{ category.slug|urlencode }}"><span>{{ category.icon|default:"✦" }}</span>{{ category.name }} <small>{{ category.product_count }}</small></a>{% empty %}
+          <p class="muted">Categories are being set up. Check back soon.</p>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+
+  <section class="wrap catalog-section" id="marketplace">
+    <div class="section-heading">
+      <div><span class="eyebrow">{% if query %}SEARCH RESULTS{% elif selected_category %}DEPARTMENT{% else %}MADE FOR EVERYDAY{% endif %}</span>
+        <h2>{% if query %}Results for “{{ query }}”{% elif selected_category_obj %}{{ selected_category_obj.name }}{% else %}Fresh picks from local stores{% endif %}</h2>
+        {% if query or selected_category or min_price or max_price %}<p class="muted">{{ total_results }} product{{ total_results|pluralize }} match your filters.</p>{% endif %}
+      </div>
+      <form method="get" action="{% url 'shop' %}" class="sort-form">
+        {% if query %}<input type="hidden" name="q" value="{{ query }}">{% endif %}
+        {% if selected_category %}<input type="hidden" name="category" value="{{ selected_category }}">{% endif %}
+        {% if min_price %}<input type="hidden" name="min_price" value="{{ min_price }}">{% endif %}
+        {% if max_price %}<input type="hidden" name="max_price" value="{{ max_price }}">{% endif %}
+        {% if in_stock_only %}<input type="hidden" name="in_stock" value="1">{% endif %}
+        <label for="sort">Sort by</label>
+        <select id="sort" name="sort" onchange="this.form.submit()">
+          <option value="newest" {% if selected_sort == 'newest' %}selected{% endif %}>Newest</option>
+          <option value="price_asc" {% if selected_sort == 'price_asc' %}selected{% endif %}>Price: low to high</option>
+          <option value="price_desc" {% if selected_sort == 'price_desc' %}selected{% endif %}>Price: high to low</option>
+          <option value="rating" {% if selected_sort == 'rating' %}selected{% endif %}>Top rated</option>
+          <option value="popular" {% if selected_sort == 'popular' %}selected{% endif %}>Best selling</option>
+        </select>
+      </form>
+    </div>
+
+    <form class="filter-bar" method="get" action="{% url 'shop' %}">
+      <div class="filter-field grow">
+        <label for="filter-q">Keyword</label>
+        <input id="filter-q" type="search" name="q" value="{{ query }}" placeholder="Search name, description or store">
+      </div>
+      <div class="filter-field">
+        <label for="filter-category">Category</label>
+        <select id="filter-category" name="category">
+          <option value="">All departments</option>
+          {% for category in categories %}<option value="{{ category.slug }}" {% if selected_category == category.slug %}selected{% endif %}>{{ category.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="filter-field price-field">
+        <label for="filter-min">Min price (UGX)</label>
+        <input id="filter-min" type="number" name="min_price" min="0" step="1000" value="{{ min_price }}" placeholder="0">
+      </div>
+      <div class="filter-field price-field">
+        <label for="filter-max">Max price (UGX)</label>
+        <input id="filter-max" type="number" name="max_price" min="0" step="1000" value="{{ max_price }}" placeholder="Any">
+      </div>
+      <label class="check-field"><input type="checkbox" name="in_stock" value="1" {% if in_stock_only %}checked{% endif %}> In stock only</label>
+      <button class="button button-dark" type="submit">Apply filters</button>
+      {% if query or selected_category or min_price or max_price or in_stock_only %}<a class="subtle-link clear-filter" href="{% url 'shop' %}">Clear ×</a>{% endif %}
+    </form>
+
+    <div class="product-grid">
+      {% for product in products %}
+        {% include 'store/_product_card.html' %}
+      {% empty %}
+        <div class="empty-state"><span class="empty-icon">⌕</span><h3>No products found</h3><p>Try a broader keyword, another department or a wider price range.</p><a class="button button-dark" href="{% url 'shop' %}">Browse all products</a></div>
+      {% endfor %}
+    </div>
+
+    {% if page_obj.has_other_pages %}
+      <nav class="pagination" aria-label="Catalogue pages">
+        {% if page_obj.has_previous %}<a class="page-link" href="?{% querystring page=page_obj.previous_page_number %}">← Previous</a>{% endif %}
+        <span class="page-current">Page {{ page_obj.number }} of {{ paginator.num_pages }}</span>
+        {% if page_obj.has_next %}<a class="page-link" href="?{% querystring page=page_obj.next_page_number %}">Next →</a>{% endif %}
+      </nav>
+    {% endif %}
+  </section>
+
+  <section class="seller-banner">
+    <div class="wrap seller-banner-row"><div><span class="eyebrow">GROW WITH US</span><h2>Have something great to sell?</h2><p>Open your storefront, manage stock and reach customers across Kampala.</p></div><a class="button button-light" href="{% url 'register' %}">Start selling <span aria-hidden="true">→</span></a></div>
+  </section>
+{% endblock %}

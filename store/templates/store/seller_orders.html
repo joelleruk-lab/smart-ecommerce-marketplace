@@ -1,0 +1,35 @@
+{% extends 'store/base.html' %}
+{% block title %}Seller orders · Rukomeza Market{% endblock %}
+{% block content %}
+  <section class="wrap page-section">
+    <div class="page-title"><span class="eyebrow">FULFILMENT</span><h1>Orders for your products</h1><p>Only orders that contain one of your listings are shown.</p></div>
+    <div class="toolbar">
+      <a class="chip {% if not selected_status %}chip-active{% endif %}" href="{% url 'seller_orders' %}">All</a>
+      <a class="chip {% if selected_status == 'PENDING' %}chip-active{% endif %}" href="?status=PENDING">Pending</a>
+      <a class="chip {% if selected_status == 'PAID' %}chip-active{% endif %}" href="?status=PAID">Paid</a>
+      <a class="chip {% if selected_status == 'SHIPPED' %}chip-active{% endif %}" href="?status=SHIPPED">Shipped</a>
+      <a class="chip {% if selected_status == 'DELIVERED' %}chip-active{% endif %}" href="?status=DELIVERED">Delivered</a>
+      <a class="chip {% if selected_status == 'CANCELLED' %}chip-active{% endif %}" href="?status=CANCELLED">Cancelled</a>
+      <a class="subtle-link" href="{% url 'seller_dashboard' %}">← Seller studio</a>
+    </div>
+    <div class="panel">
+      <div class="table-wrap"><table class="data">
+        <thead><tr><th>Order</th><th>Customer</th><th>Your items</th><th>Total</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+          {% for order in orders %}
+            <tr>
+              <td><strong>{{ order.reference }}</strong><span class="muted">{{ order.created_at|date:"M j, Y · g:i a" }}</span></td>
+              <td>{{ order.customer.username }}</td>
+              <td>{% for item in order.items.all %}{% if item.seller_id == seller.pk %}<span class="line-item">{{ item.quantity }} × {{ item.product_name_snapshot }}</span>{% endif %}{% endfor %}</td>
+              <td>UGX {{ order.total_amount|floatformat:0 }}</td>
+              <td><span class="status-badge status-{{ order.status|lower }}">{{ order.get_status_display }}</span></td>
+              <td><a class="subtle-link" href="{% url 'order_detail' order.pk %}">View</a></td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="6" class="muted">No orders in this view.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table></div>
+    </div>
+  </section>
+{% endblock %}

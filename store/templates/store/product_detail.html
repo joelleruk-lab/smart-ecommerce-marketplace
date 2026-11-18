@@ -1,0 +1,69 @@
+{% extends 'store/base.html' %}
+{% block title %}{{ product.name }} · Rukomeza Market{% endblock %}
+{% block content %}
+  <div class="wrap breadcrumb"><a href="{% url 'home' %}">Home</a><span> / </span><a href="{% url 'shop' %}">Shop</a><span> / </span>{{ product.name }}</div>
+  <section class="wrap detail-layout">
+    <div class="detail-photo">
+      {% if product.display_image_url %}<img src="{{ product.display_image_url }}" alt="{{ product.name }}">
+      {% else %}<div class="detail-placeholder" aria-label="Product image not provided"><span>{{ product.category.name|first }}</span></div>{% endif %}
+      {% if product.images.all|length > 1 %}
+        <div class="thumb-strip">
+          {% for image in product.images.all %}{% if image.external_url or image.image %}<img src="{% if image.external_url %}{{ image.external_url }}{% else %}{{ image.image.url }}{% endif %}" alt="{{ image.alt_text|default:product.name }}">{% endif %}{% endfor %}
+        </div>
+      {% endif %}
+    </div>
+    <div class="detail-copy">
+      <span class="eyebrow">{{ product.category.name }} · SOLD BY {{ product.seller.store_name|upper }}</span>
+      <h1>{{ product.name }}</h1>
+      <div class="detail-rating">{% if product.rating_average %}<span class="stars">★</span> {{ product.rating_average }} · {{ product.reviews_total }} review{{ product.reviews_total|pluralize }}{% else %}<span class="muted">No reviews yet</span>{% endif %}</div>
+      <div class="detail-price">UGX {{ product.price|floatformat:0 }}</div>
+      <p class="detail-description">{{ product.description|linebreaksbr }}</p>
+      <p class="{% if product.stock_quantity %}stock-available{% else %}stock-unavailable{% endif %}">
+        {% if product.stock_quantity %}{{ product.stock_quantity }} in stock{% if product.stock_quantity <= product.low_stock_threshold %} · selling fast{% endif %}{% else %}Currently out of stock{% endif %}
+      </p>
+      {% if product.stock_quantity %}
+        <form class="purchase-form" action="{% url 'add_to_cart' product.pk %}" method="post">
+          {% csrf_token %}<label for="quantity">Quantity</label><input id="quantity" name="quantity" type="number" min="1" max="{{ product.stock_quantity }}" value="1" required>
+          <button class="button button-dark" type="submit">Add to basket</button>
+        </form>
+      {% else %}
+        <p class="form-error">This listing is temporarily unavailable. Browse <a href="{% url 'shop' %}">similar products</a>.</p>
+      {% endif %}
+      <div class="seller-note">
+        <strong>{{ product.seller.store_name }}</strong>
+        <span>{{ product.seller.store_description|default:"Independent Kampala seller" }}</span>
+        <span>SKU {{ product.sku }} · Listed {{ product.created_at|date:"M j, Y" }}</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap review-section" id="reviews">
+    <div class="section-heading"><div><span class="eyebrow">COMMUNITY FEEDBACK</span><h2>Verified customer reviews</h2></div><span class="muted">Only customers who paid for this product can review it.</span></div>
+    {% if can_review %}
+      <form class="form-panel review-form" method="post">{% csrf_token %}<h3>Share your experience</h3>{{ review_form.as_p }}<button class="button button-dark" type="submit">Submit verified review</button></form>
+    {% elif already_reviewed %}
+      <p class="muted">You have already reviewed this product. Thank you!</p>
+    {% elif user.is_authenticated %}
+      <p class="muted">A paid order for this item is required before you can review it.</p>
+    {% else %}
+      <p class="muted"><a href="{% url 'login' %}?next={{ request.path|urlencode }}">Sign in</a> to review a verified purchase.</p>
+    {% endif %}
+    <div class="review-list">
+      {% for review in reviews %}
+        <article class="review-card">
+          <div class="review-heading"><strong>{{ review.customer.username }}</strong><span>{{ review.created_at|date:"M j, Y" }}</span></div>
+          <div class="rating" aria-label="{{ review.rating }} out of 5 stars">{% for star in "12345" %}{% if forloop.counter <= review.rating %}★{% else %}☆{% endif %}{% endfor %}</div>
+          <p>{{ review.comment|linebreaksbr }}</p>
+          {% if review.is_verified_purchase %}<span class="verified-pill">✓ Verified purchase</span>{% endif %}
+        </article>
+      {% empty %}<p class="muted">No reviews yet — be the first verified buyer to share your thoughts.</p>{% endfor %}
+    </div>
+  </section>
+
+  {% if related %}
+    <section class="wrap catalog-section related-section">
+      <div class="section-heading"><div><span class="eyebrow">KEEP EXPLORING</span><h2>More in {{ product.category.name }}</h2></div></div>
+      <div class="product-grid">{% for product in related %}{% include 'store/_product_card.html' %}{% endfor %}</div>
+    </section>
+  {% endif %}
+{% endblock %}

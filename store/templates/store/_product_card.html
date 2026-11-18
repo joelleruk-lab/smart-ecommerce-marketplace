@@ -1,0 +1,23 @@
+{% load static %}
+<article class="product-card">
+  <a class="product-photo" href="{% url 'product_detail' product.pk %}">
+    {% with image=product.display_image_url %}
+      {% if image %}<img src="{{ image }}" alt="{{ product.name }}" loading="lazy">
+      {% else %}<div class="product-placeholder" aria-label="{{ product.category.name }} product image"><span>{{ product.category.name|first|default:"R" }}</span></div>{% endif %}
+    {% endwith %}
+    {% if product.stock_quantity == 0 %}<span class="stock-badge sold-out">Out of stock</span>
+    {% elif product.stock_quantity <= product.low_stock_threshold %}<span class="stock-badge low">Low stock</span>{% endif %}
+  </a>
+  <div class="product-info">
+    <div class="product-meta"><span>{{ product.category.name }}</span><span>{{ product.seller.store_name }}</span></div>
+    <h3><a href="{% url 'product_detail' product.pk %}">{{ product.name }}</a></h3>
+    <div class="product-rating" aria-label="Rated {{ product.rating_average|default:0 }} out of 5">
+      {% if product.rating_average %}<span class="stars">★</span> {{ product.rating_average }} <span class="muted">({{ product.reviews_total }})</span>{% else %}<span class="muted">No reviews yet</span>{% endif %}
+    </div>
+    <div class="product-bottom"><strong>UGX {{ product.price|floatformat:0 }}</strong>
+      {% if product.stock_quantity > 0 %}
+        <form action="{% url 'add_to_cart' product.pk %}" method="post">{% csrf_token %}<button class="add-button" type="submit" aria-label="Add {{ product.name }} to basket">+</button></form>
+      {% else %}<span class="muted">Unavailable</span>{% endif %}
+    </div>
+  </div>
+</article>

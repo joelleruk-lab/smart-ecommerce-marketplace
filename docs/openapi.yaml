@@ -1,0 +1,1311 @@
+openapi: 3.1.0
+info:
+  title: Rukomeza Market API
+  version: 1.0.0
+  summary: Multi-vendor marketplace API with atomic inventory and mock payments.
+  description: |
+    JSON REST API for the Rukomeza Market multi-vendor marketplace.
+
+    * **Authentication** — opaque bearer tokens issued by `/auth/login` or
+      `/auth/register`. Send `Authorization: Bearer <token>`. Tokens are stored
+      as SHA-256 hashes and can be revoked individually.
+    * **Money** — all monetary values are decimal strings (e.g. `"50000.00"`)
+      in UGX to avoid floating-point errors.
+    * **Stock** — checkout validates and decrements stock inside one database
+      transaction. The decrement is a conditional `UPDATE ... WHERE stock >= qty`,
+      so overselling is impossible even under concurrent requests.
+    * **Prices** — the server recalculates every total from current product
+      rows. Order items keep an immutable `unit_price_snapshot`.
+    * **Payments** — a documented mock gateway simulates success/failure. A
+      signed webhook (`X-Mock-Signature`) is also supported.
+  contact:
+    name: Rukomeza Market
+    email: support@rukomeza.test
+servers:
+  - url: https://YOUR-APP.onrender.com
+    description: Production (replace with your deployed URL)
+  - url: http://127.0.0.1:8000
+    description: Local development
+tags:
+  - name: Authentication
+  - name: Catalogue
+  - name: Cart
+  - name: Orders
+  - name: Payments
+  - name: Seller
+  - name: Admin
+  - name: Operations
+paths:
+  /api/v1/auth/register:
+    post:
+      tags: [Authentication]
+      summary: Register a customer or seller
+      description: Creates the account with a hashed password and returns a bearer token. Seller accounts start unapproved.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, email, password1, password2, role]
+              properties:
+                username: {type: string, minLength: 3}
+                email: {type: string, format: email}
+                password1: {type: string, minLength: 8}
+                password2: {type: string, minLength: 8}
+                first_name: {type: string}
+                last_name: {type: string}
+                phone_number: {type: string}
+                role: {type: string, enum: [CUSTOMER, SELLER]}
+                store_name: {type: string, description: Required when role is SELLER}
+                store_description: {type: string}
+      responses:
+        '201':
+          description: Account created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AuthResponse'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /api/v1/auth/login:
+    post:
+      tags: [Authentication]
+      summary: Log in with username or email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                username: {type: string, description: Username or email}
+                email: {type: string}
+                password: {type: string, format: password}
+      responses:
+        '200':
+          description: Authenticated
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AuthResponse'}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/auth/logout:
+    post:
+      tags: [Authentication]
+      summary: Revoke the current token
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: Token revoked}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/auth/me:
+    get:
+      tags: [Authentication]
+      summary: Current user and seller profile
+      security: [{bearerAuth: []}]
+      responses:
+        '200':
+          description: Current account
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      user: {$ref: '#/components/schemas/User'}
+                      seller_profile: {$ref: '#/components/schemas/Seller'}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/products:
+    get:
+      tags: [Catalogue]
+      summary: Search and filter products
+      description: Only active products from approved, non-suspended sellers are returned. Uses the composite (category, price) index for filtered queries.
+      parameters:
+        - {in: query, name: q, schema: {type: string}, description: Keyword across name, description, category and store}
+        - {in: query, name: category, schema: {type: string}, description: Category id or slug}
+        - {in: query, name: min_price, schema: {type: number, minimum: 0}}
+        - {in: query, name: max_price, schema: {type: number, minimum: 0}}
+        - {in: query, name: seller, schema: {type: string}, description: Seller id or slug}
+        - {in: query, name: in_stock, schema: {type: boolean}}
+        - {in: query, name: sort, schema: {type: string, enum: [newest, oldest, price_asc, price_desc, rating, popular]}}
+        - {in: query, name: page, schema: {type: integer, minimum: 1, default: 1}}
+        - {in: query, name: page_size, schema: {type: integer, minimum: 1, maximum: 60, default: 12}}
+      responses:
+        '200':
+          description: Paginated products
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ProductPage'}
+  /api/v1/products/{productId}:
+    get:
+      tags: [Catalogue]
+      summary: Product detail
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      responses:
+        '200':
+          description: Product with images and recent reviews
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {$ref: '#/components/schemas/Product'}
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/products/{productId}/reviews:
+    get:
+      tags: [Catalogue]
+      summary: Product reviews
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Paginated reviews
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ReviewPage'}
+  /api/v1/products/{productId}/reviews/create:
+    post:
+      tags: [Catalogue]
+      summary: Create a verified-purchase review
+      description: Returns 403 when the customer has no paid/shipped/delivered order item for the product, and 409 for a duplicate review.
+      security: [{bearerAuth: []}]
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rating, comment]
+              properties:
+                rating: {type: integer, minimum: 1, maximum: 5}
+                comment: {type: string, minLength: 3, maxLength: 2000}
+      responses:
+        '201':
+          description: Review created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {$ref: '#/components/schemas/Review'}
+        '403':
+          description: Verified purchase required
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '409':
+          description: Duplicate review
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+  /api/v1/categories:
+    get:
+      tags: [Catalogue]
+      summary: Active categories with product counts
+      responses:
+        '200':
+          description: Category list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: {$ref: '#/components/schemas/Category'}
+  /api/v1/cart:
+    get:
+      tags: [Cart]
+      summary: Get the current cart
+      security: [{bearerAuth: []}]
+      responses:
+        '200':
+          description: Cart contents with live stock
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {$ref: '#/components/schemas/Cart'}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/cart/items:
+    post:
+      tags: [Cart]
+      summary: Add a product to the cart
+      description: Quantity is limited to 1–99 per line and cannot exceed current stock. Adding more than 50 distinct products is rejected.
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [product_id, quantity]
+              properties:
+                product_id: {type: integer}
+                quantity: {type: integer, minimum: 1, maximum: 99}
+      responses:
+        '201':
+          description: Updated cart
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {$ref: '#/components/schemas/Cart'}
+        '409':
+          description: Stock or quantity limit conflict
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+  /api/v1/cart/items/{productId}:
+    patch:
+      tags: [Cart]
+      summary: Change a cart line quantity (0 removes it)
+      security: [{bearerAuth: []}]
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quantity]
+              properties:
+                quantity: {type: integer, minimum: 0, maximum: 99}
+      responses:
+        '200':
+          description: Updated cart
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {$ref: '#/components/schemas/Cart'}
+        '409':
+          description: Stock conflict
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+    delete:
+      tags: [Cart]
+      summary: Remove a cart line
+      security: [{bearerAuth: []}]
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      responses:
+        '200':
+          description: Updated cart
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {$ref: '#/components/schemas/Cart'}
+  /api/v1/cart/clear:
+    delete:
+      tags: [Cart]
+      summary: Empty the cart
+      security: [{bearerAuth: []}]
+      responses:
+        '200':
+          description: Empty cart
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {$ref: '#/components/schemas/Cart'}
+  /api/v1/orders:
+    get:
+      tags: [Orders]
+      summary: List orders
+      description: Customers see their own orders; sellers see orders containing their products; admins see all orders.
+      security: [{bearerAuth: []}]
+      parameters:
+        - {in: query, name: status, schema: {type: string, enum: [PENDING, PAID, SHIPPED, DELIVERED, CANCELLED]}}
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Paginated orders
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OrderPage'}
+    post:
+      tags: [Orders]
+      summary: Place an order (atomic checkout)
+      description: |
+        Converts the cart into a PENDING order, decrements stock and creates a
+        PENDING payment in one transaction. Server-side prices are used; an
+        optional `expected_total` causes a 409 `price_changed` response when the
+        cart total is stale.
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [full_name, phone, address, city]
+              properties:
+                full_name: {type: string}
+                phone: {type: string}
+                address: {type: string}
+                city: {type: string}
+                gateway: {type: string, enum: [MOCK], default: MOCK}
+                expected_total: {type: string, description: Optional amount the client displayed}
+      responses:
+        '201':
+          description: Order created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {$ref: '#/components/schemas/Order'}
+        '409':
+          description: Empty cart, price change, unavailable product or insufficient stock
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+  /api/v1/orders/{orderId}:
+    get:
+      tags: [Orders]
+      summary: Order detail with price snapshots
+      security: [{bearerAuth: []}]
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: Order detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {$ref: '#/components/schemas/Order'}
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/orders/{orderId}/cancel:
+    post:
+      tags: [Orders]
+      summary: Cancel a pending or paid order
+      description: Restores stock exactly once and marks the payment CANCELLED or REFUNDED. Terminal orders cannot be cancelled.
+      security: [{bearerAuth: []}]
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: {type: string}
+      responses:
+        '200':
+          description: Cancelled order
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {$ref: '#/components/schemas/Order'}
+        '409':
+          description: Invalid lifecycle transition
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+  /api/v1/orders/{orderId}/tracking:
+    get:
+      tags: [Orders]
+      summary: Status timeline and shipment
+      security: [{bearerAuth: []}]
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: Tracking information
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Tracking'}
+  /api/v1/orders/{orderId}/disputes:
+    post:
+      tags: [Orders]
+      summary: Open a dispute for an order
+      security: [{bearerAuth: []}]
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason, description]
+              properties:
+                reason: {type: string, enum: [NOT_RECEIVED, DAMAGED, WRONG_ITEM, REFUND, OTHER]}
+                description: {type: string, minLength: 10}
+      responses:
+        '201':
+          description: Dispute created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Dispute'}
+        '409':
+          description: An open dispute already exists
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+  /api/v1/payments/{orderId}:
+    get:
+      tags: [Payments]
+      summary: Payment status for an order
+      security: [{bearerAuth: []}]
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: Payment details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      order_id: {type: integer}
+                      order_status: {type: string}
+                      payment: {$ref: '#/components/schemas/Payment'}
+  /api/v1/payments/{orderId}/pay:
+    post:
+      tags: [Payments]
+      summary: Simulate a mock gateway payment
+      description: Success marks the payment PAID and the order PAID. Failure records a FAILED attempt and leaves the order PENDING so it can be retried. Replaying success is idempotent.
+      security: [{bearerAuth: []}]
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [outcome]
+              properties:
+                outcome: {type: string, enum: [success, failure]}
+      responses:
+        '200':
+          description: Payment result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      payment: {$ref: '#/components/schemas/Payment'}
+                      order_status: {type: string}
+                      order_id: {type: integer}
+        '409':
+          description: Order is not payable
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+  /api/v1/payments/webhook/mock:
+    post:
+      tags: [Payments]
+      summary: Signed mock-gateway callback
+      description: |
+        Verifies `X-Mock-Signature` = HMAC-SHA256(MOCK_GATEWAY_SECRET, raw request
+        body) in hex, then processes the referenced payment. Mirrors Stripe-style
+        webhook verification without moving real money.
+      parameters:
+        - {in: header, name: X-Mock-Signature, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reference, outcome]
+              properties:
+                reference: {type: string, description: Payment transaction reference}
+                outcome: {type: string, enum: [success, failure]}
+      responses:
+        '200': {description: Callback processed}
+        '401': {description: Invalid signature}
+        '404': {description: Unknown reference}
+  /api/v1/seller/summary:
+    get:
+      tags: [Seller]
+      summary: Seller dashboard metrics
+      security: [{bearerAuth: []}]
+      responses:
+        '200':
+          description: Seller and summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      seller: {$ref: '#/components/schemas/Seller'}
+                      summary: {type: object}
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/seller/products:
+    get:
+      tags: [Seller]
+      summary: List own products (including inactive)
+      security: [{bearerAuth: []}]
+      responses:
+        '200':
+          description: Seller products
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ProductPage'}
+  /api/v1/seller/products/create:
+    post:
+      tags: [Seller]
+      summary: Create a listing with inventory
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, description, price, category_id, stock_quantity]
+              properties:
+                name: {type: string, minLength: 3}
+                description: {type: string, minLength: 10}
+                price: {type: string, example: "25000.00"}
+                category_id: {type: integer}
+                stock_quantity: {type: integer, minimum: 0}
+                low_stock_threshold: {type: integer, minimum: 0, default: 5}
+                image_url: {type: string, format: uri}
+      responses:
+        '201':
+          description: Product created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {$ref: '#/components/schemas/Product'}
+        '403':
+          description: Store not approved/suspended
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+  /api/v1/seller/products/{productId}:
+    patch:
+      tags: [Seller]
+      summary: Edit own listing
+      security: [{bearerAuth: []}]
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: {type: string}
+                description: {type: string}
+                price: {type: string}
+                category_id: {type: integer}
+                is_active: {type: boolean}
+                low_stock_threshold: {type: integer}
+                stock_quantity: {type: integer, minimum: 0}
+      responses:
+        '200':
+          description: Updated product
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {$ref: '#/components/schemas/Product'}
+    delete:
+      tags: [Seller]
+      summary: Deactivate own listing
+      security: [{bearerAuth: []}]
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      responses:
+        '200': {description: Deactivated}
+  /api/v1/seller/inventory/{productId}:
+    patch:
+      tags: [Seller]
+      summary: Set stock or apply a delta
+      security: [{bearerAuth: []}]
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                stock_quantity: {type: integer, minimum: 0}
+                delta: {type: integer, description: Positive restock or negative adjustment; stock cannot go below 0}
+      responses:
+        '200': {description: New stock level}
+  /api/v1/seller/orders:
+    get:
+      tags: [Seller]
+      summary: Orders containing own products
+      security: [{bearerAuth: []}]
+      parameters:
+        - {in: query, name: status, schema: {type: string}}
+      responses:
+        '200':
+          description: Seller order list
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OrderPage'}
+  /api/v1/admin/users:
+    get:
+      tags: [Admin]
+      summary: List and filter accounts
+      security: [{bearerAuth: []}]
+      parameters:
+        - {in: query, name: role, schema: {type: string, enum: [CUSTOMER, SELLER, ADMIN]}}
+        - {in: query, name: q, schema: {type: string}}
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Accounts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      results:
+                        type: array
+                        items: {$ref: '#/components/schemas/User'}
+                      pagination: {$ref: '#/components/schemas/Pagination'}
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/admin/users/{userId}:
+    patch:
+      tags: [Admin]
+      summary: Activate, deactivate or block an account
+      security: [{bearerAuth: []}]
+      parameters:
+        - {in: path, name: userId, required: true, schema: {type: integer}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                is_active: {type: boolean}
+                is_blocked: {type: boolean}
+      responses:
+        '200': {description: Updated account}
+        '403': {description: Cannot modify own access}
+  /api/v1/admin/sellers:
+    get:
+      tags: [Admin]
+      summary: Seller applications and stores
+      security: [{bearerAuth: []}]
+      parameters:
+        - {in: query, name: status, schema: {type: string, enum: [PENDING, APPROVED, SUSPENDED]}}
+      responses:
+        '200':
+          description: Sellers
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SellerPage'}
+  /api/v1/admin/sellers/{sellerId}/action:
+    post:
+      tags: [Admin]
+      summary: Approve, suspend, reinstate or reject a seller
+      security: [{bearerAuth: []}]
+      parameters:
+        - {in: path, name: sellerId, required: true, schema: {type: integer}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: {type: string, enum: [approve, suspend, reinstate, reject]}
+      responses:
+        '200':
+          description: Updated seller
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {$ref: '#/components/schemas/Seller'}
+  /api/v1/admin/categories:
+    get:
+      tags: [Admin]
+      summary: All categories
+      security: [{bearerAuth: []}]
+      responses:
+        '200':
+          description: Categories
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: {$ref: '#/components/schemas/Category'}
+    post:
+      tags: [Admin]
+      summary: Create category
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: {type: string}
+                icon: {type: string}
+                description: {type: string}
+                is_active: {type: boolean, default: true}
+      responses:
+        '201': {description: Category created}
+        '409': {description: Duplicate name}
+  /api/v1/admin/categories/{categoryId}:
+    patch:
+      tags: [Admin]
+      summary: Edit category
+      security: [{bearerAuth: []}]
+      parameters:
+        - {in: path, name: categoryId, required: true, schema: {type: integer}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: {type: string}
+                icon: {type: string}
+                description: {type: string}
+                is_active: {type: boolean}
+      responses:
+        '200': {description: Updated category}
+    delete:
+      tags: [Admin]
+      summary: Delete unused category
+      security: [{bearerAuth: []}]
+      parameters:
+        - {in: path, name: categoryId, required: true, schema: {type: integer}}
+      responses:
+        '200': {description: Deleted}
+        '409': {description: Category still has products}
+  /api/v1/admin/orders:
+    get:
+      tags: [Admin]
+      summary: All orders
+      security: [{bearerAuth: []}]
+      parameters:
+        - {in: query, name: status, schema: {type: string}}
+        - {in: query, name: q, schema: {type: string}}
+      responses:
+        '200':
+          description: Orders
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OrderPage'}
+  /api/v1/admin/orders/{orderId}/status:
+    post:
+      tags: [Admin]
+      summary: Apply an order lifecycle transition
+      description: Only PAID -> SHIPPED -> DELIVERED and cancellations are allowed. Illegal jumps return 409.
+      security: [{bearerAuth: []}]
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: {type: string, enum: [SHIPPED, DELIVERED, CANCELLED]}
+                courier: {type: string}
+                tracking_number: {type: string}
+                note: {type: string}
+      responses:
+        '200':
+          description: Updated order
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {$ref: '#/components/schemas/Order'}
+        '409':
+          description: Invalid transition
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+  /api/v1/admin/disputes:
+    get:
+      tags: [Admin]
+      summary: Dispute queue
+      security: [{bearerAuth: []}]
+      parameters:
+        - {in: query, name: status, schema: {type: string, enum: [OPEN, UNDER_REVIEW, RESOLVED, REJECTED]}}
+      responses:
+        '200':
+          description: Disputes
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DisputePage'}
+  /api/v1/admin/disputes/{disputeId}:
+    patch:
+      tags: [Admin]
+      summary: Update or resolve a dispute
+      security: [{bearerAuth: []}]
+      parameters:
+        - {in: path, name: disputeId, required: true, schema: {type: integer}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: {type: string, enum: [UNDER_REVIEW, RESOLVED, REJECTED]}
+                resolution_note: {type: string}
+      responses:
+        '200': {description: Updated dispute}
+        '400': {description: Resolution note required to close}
+  /api/v1/admin/reports/summary:
+    get:
+      tags: [Admin]
+      summary: Platform KPIs
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: Revenue, orders, customers, sellers, low stock and disputes}
+  /api/v1/admin/reports/sales-per-seller:
+    get:
+      tags: [Admin]
+      summary: Sales per seller
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: Seller units, revenue and order counts}
+  /api/v1/admin/reports/revenue:
+    get:
+      tags: [Admin]
+      summary: Revenue per period
+      security: [{bearerAuth: []}]
+      parameters:
+        - {in: query, name: period, schema: {type: string, enum: [day, week, month, year], default: month}}
+        - {in: query, name: from, schema: {type: string, format: date}}
+        - {in: query, name: to, schema: {type: string, format: date}}
+      responses:
+        '200': {description: Revenue buckets}
+  /api/v1/admin/reports/best-sellers:
+    get:
+      tags: [Admin]
+      summary: Best-selling products
+      security: [{bearerAuth: []}]
+      parameters:
+        - {in: query, name: limit, schema: {type: integer, minimum: 1, maximum: 50, default: 10}}
+      responses:
+        '200': {description: Products by units sold}
+  /api/v1/admin/reports/low-stock:
+    get:
+      tags: [Admin]
+      summary: Low-stock alerts
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: Inventory at or below each product's threshold}
+  /healthz:
+    get:
+      tags: [Operations]
+      summary: Deployment health check
+      responses:
+        '200':
+          description: Service and database healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: {type: string, example: ok}
+                  database: {type: boolean, example: true}
+                  time: {type: string, format: date-time}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque
+  parameters:
+    ProductId:
+      in: path
+      name: productId
+      required: true
+      schema: {type: integer}
+    OrderId:
+      in: path
+      name: orderId
+      required: true
+      schema: {type: integer}
+    Page:
+      in: query
+      name: page
+      schema: {type: integer, minimum: 1, default: 1}
+    PageSize:
+      in: query
+      name: page_size
+      schema: {type: integer, minimum: 1, maximum: 60, default: 12}
+  responses:
+    BadRequest:
+      description: Validation error
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Unauthorized:
+      description: Missing or invalid bearer token
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Forbidden:
+      description: Authenticated but not allowed
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: {type: string, example: insufficient_stock}
+            message: {type: string}
+            details: {type: object, additionalProperties: true}
+    AuthResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            user: {$ref: '#/components/schemas/User'}
+            token: {type: string}
+            token_type: {type: string, example: Bearer}
+    User:
+      type: object
+      properties:
+        id: {type: integer}
+        username: {type: string}
+        email: {type: string, nullable: true}
+        full_name: {type: string}
+        role: {type: string, enum: [CUSTOMER, SELLER, ADMIN]}
+        phone_number: {type: string}
+        is_active: {type: boolean}
+        is_blocked: {type: boolean}
+        date_joined: {type: string, format: date-time}
+    Seller:
+      type: object
+      properties:
+        id: {type: integer}
+        store_name: {type: string}
+        slug: {type: string}
+        description: {type: string}
+        is_approved: {type: boolean}
+        is_suspended: {type: boolean}
+        status: {type: string, enum: [PENDING, APPROVED, SUSPENDED]}
+        approved_at: {type: string, format: date-time, nullable: true}
+    Category:
+      type: object
+      properties:
+        id: {type: integer}
+        name: {type: string}
+        slug: {type: string}
+        icon: {type: string}
+        description: {type: string}
+        is_active: {type: boolean}
+        product_count: {type: integer, nullable: true}
+    Product:
+      type: object
+      properties:
+        id: {type: integer}
+        name: {type: string}
+        sku: {type: string}
+        description: {type: string}
+        price: {type: string, example: "50000.00"}
+        currency: {type: string, example: UGX}
+        stock: {type: integer}
+        low_stock: {type: boolean}
+        is_active: {type: boolean}
+        category:
+          type: object
+          properties:
+            id: {type: integer}
+            name: {type: string}
+            slug: {type: string}
+        seller:
+          type: object
+          properties:
+            id: {type: integer}
+            store_name: {type: string}
+            slug: {type: string}
+        primary_image: {type: string, nullable: true}
+        rating: {type: number, nullable: true}
+        review_count: {type: integer}
+        created_at: {type: string, format: date-time}
+        images:
+          type: array
+          items:
+            type: object
+            properties:
+              id: {type: integer}
+              url: {type: string}
+              alt_text: {type: string}
+              is_primary: {type: boolean}
+        recent_reviews:
+          type: array
+          items: {$ref: '#/components/schemas/Review'}
+    Review:
+      type: object
+      properties:
+        id: {type: integer}
+        customer:
+          type: object
+          properties:
+            id: {type: integer}
+            username: {type: string}
+        product_id: {type: integer}
+        rating: {type: integer, minimum: 1, maximum: 5}
+        comment: {type: string}
+        is_verified_purchase: {type: boolean}
+        created_at: {type: string, format: date-time}
+    Cart:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              product_id: {type: integer}
+              name: {type: string}
+              price: {type: string}
+              quantity: {type: integer}
+              line_total: {type: string}
+              stock: {type: integer}
+              seller: {type: string}
+              primary_image: {type: string, nullable: true}
+              available: {type: boolean}
+        item_count: {type: integer}
+        subtotal: {type: string}
+        total: {type: string}
+    Payment:
+      type: object
+      properties:
+        id: {type: integer}
+        order_id: {type: integer}
+        gateway: {type: string, enum: [MOCK, STRIPE, PAYSTACK, FLUTTERWAVE]}
+        reference: {type: string}
+        provider_reference: {type: string}
+        amount: {type: string}
+        currency: {type: string}
+        status: {type: string, enum: [PENDING, PAID, FAILED, CANCELLED, REFUNDED]}
+        attempts: {type: integer}
+        failure_reason: {type: string}
+        paid_at: {type: string, format: date-time, nullable: true}
+        created_at: {type: string, format: date-time}
+    Order:
+      type: object
+      properties:
+        id: {type: integer}
+        reference: {type: string}
+        status: {type: string, enum: [PENDING, PAID, SHIPPED, DELIVERED, CANCELLED]}
+        status_display: {type: string}
+        subtotal: {type: string}
+        shipping_fee: {type: string}
+        total: {type: string}
+        item_count: {type: integer}
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              id: {type: integer}
+              product_id: {type: integer, nullable: true}
+              name: {type: string, description: Snapshot of the product name}
+              sku: {type: string}
+              seller: {type: string}
+              quantity: {type: integer}
+              unit_price: {type: string, description: Immutable purchase-time price}
+              line_total: {type: string}
+        created_at: {type: string, format: date-time}
+        paid_at: {type: string, format: date-time, nullable: true}
+        shipped_at: {type: string, format: date-time, nullable: true}
+        delivered_at: {type: string, format: date-time, nullable: true}
+        cancelled_at: {type: string, format: date-time, nullable: true}
+        can_be_cancelled: {type: boolean}
+        payment: {$ref: '#/components/schemas/Payment'}
+        customer:
+          type: object
+          properties:
+            id: {type: integer}
+            username: {type: string}
+        shipping:
+          type: object
+          properties:
+            full_name: {type: string}
+            phone: {type: string}
+            address: {type: string}
+            city: {type: string}
+        shipment:
+          type: object
+          nullable: true
+          properties:
+            courier: {type: string}
+            tracking_number: {type: string}
+            status: {type: string}
+            shipped_at: {type: string, nullable: true}
+            delivered_at: {type: string, nullable: true}
+        status_history:
+          type: array
+          items:
+            type: object
+            properties:
+              from: {type: string}
+              to: {type: string}
+              note: {type: string}
+              at: {type: string, format: date-time}
+        disputes:
+          type: array
+          items: {$ref: '#/components/schemas/Dispute'}
+    Dispute:
+      type: object
+      properties:
+        id: {type: integer}
+        order_id: {type: integer}
+        reason: {type: string}
+        status: {type: string, enum: [OPEN, UNDER_REVIEW, RESOLVED, REJECTED]}
+        description: {type: string}
+        resolution_note: {type: string}
+        created_at: {type: string, format: date-time}
+    Tracking:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            order_id: {type: integer}
+            reference: {type: string}
+            status: {type: string}
+            timeline:
+              type: array
+              items:
+                type: object
+                properties:
+                  from: {type: string}
+                  to: {type: string}
+                  note: {type: string}
+                  at: {type: string, format: date-time}
+            shipment: {type: object, nullable: true}
+    Pagination:
+      type: object
+      properties:
+        page: {type: integer}
+        page_size: {type: integer}
+        total: {type: integer}
+        pages: {type: integer}
+        generated_at: {type: string, format: date-time}
+    ProductPage:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            results:
+              type: array
+              items: {$ref: '#/components/schemas/Product'}
+            pagination: {$ref: '#/components/schemas/Pagination'}
+            sort: {type: string}
+    ReviewPage:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            results:
+              type: array
+              items: {$ref: '#/components/schemas/Review'}
+            pagination: {$ref: '#/components/schemas/Pagination'}
+    OrderPage:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            results:
+              type: array
+              items: {$ref: '#/components/schemas/Order'}
+            pagination: {$ref: '#/components/schemas/Pagination'}
+    SellerPage:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            results:
+              type: array
+              items: {$ref: '#/components/schemas/Seller'}
+            pagination: {$ref: '#/components/schemas/Pagination'}
+    DisputePage:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            results:
+              type: array
+              items: {$ref: '#/components/schemas/Dispute'}
+            pagination: {$ref: '#/components/schemas/Pagination'}

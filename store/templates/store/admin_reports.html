@@ -1,0 +1,96 @@
+{% extends 'store/base.html' %}
+{% load static %}
+{% block title %}Reports · Admin · Rukomeza Market{% endblock %}
+{% block content %}
+  <section class="wrap page-section">
+    <div class="admin-head">
+      <div class="page-title"><span class="eyebrow">ANALYTICS</span><h1>Marketplace reports</h1><p>Revenue, seller performance, best sellers and stock alerts.</p></div>
+      <div class="admin-nav">
+        <a class="chip" href="{% url 'admin_dashboard' %}">Overview</a>
+        <a class="chip chip-active" href="{% url 'admin_reports' %}">Reports</a>
+        <a class="chip" href="{% url 'admin_orders' %}">Orders</a>
+        <a class="chip" href="{% url 'admin_sellers' %}">Sellers</a>
+      </div>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-card stat-highlight"><span class="stat-label">Revenue</span><strong class="stat-money">UGX {{ summary.revenue|floatformat:0 }}</strong><small>{{ summary.paid_orders }} paid orders</small></div>
+      <div class="stat-card"><span class="stat-label">Average rating</span><strong>{{ summary.average_rating }} ★</strong><small>{{ summary.reviews }} reviews</small></div>
+      <div class="stat-card"><span class="stat-label">Live products</span><strong>{{ summary.products }}</strong><small>{{ summary.sellers }} active sellers</small></div>
+      <div class="stat-card {% if summary.low_stock %}stat-warn{% endif %}"><span class="stat-label">Stock alerts</span><strong>{{ summary.low_stock }}</strong><small>At or below threshold</small></div>
+    </div>
+
+    <div class="chart-grid">
+      <div class="panel chart-card wide-chart">
+        <div class="panel-head"><h2>Revenue by month</h2><span class="muted">All paid-like orders</span></div>
+        <canvas id="revenueChart" height="280" role="img" aria-label="Monthly revenue"></canvas>
+      </div>
+      <div class="panel chart-card">
+        <div class="panel-head"><h2>Revenue by category</h2><span class="muted">Share of sales</span></div>
+        <canvas id="categoryChart" height="280" role="img" aria-label="Revenue by category"></canvas>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Sales per seller</h2><span class="muted">Snapshot prices, paid orders only</span></div>
+      <div class="table-wrap"><table class="data">
+        <thead><tr><th>Seller</th><th>Orders</th><th>Units</th><th>Revenue</th></tr></thead>
+        <tbody>{% for row in sales_per_seller %}<tr><td><strong>{{ row.store_name }}</strong></td><td>{{ row.orders }}</td><td>{{ row.units }}</td><td>UGX {{ row.revenue|floatformat:0 }}</td></tr>{% empty %}<tr><td colspan="4" class="muted">No sales recorded.</td></tr>{% endfor %}</tbody>
+      </table></div>
+    </div>
+
+    <div class="admin-grid">
+      <div class="panel">
+        <div class="panel-head"><h2>Best-selling products</h2><span class="muted">Top 10 by units</span></div>
+        <div class="table-wrap"><table class="data compact">
+          <thead><tr><th>Product</th><th>Units</th><th>Orders</th><th>Revenue</th></tr></thead>
+          <tbody>{% for row in best_sellers %}<tr><td>{{ row.product_name_snapshot }}<span class="muted">{{ row.sku_snapshot }}</span></td><td>{{ row.units }}</td><td>{{ row.orders }}</td><td>UGX {{ row.revenue|floatformat:0 }}</td></tr>{% empty %}<tr><td colspan="4" class="muted">No sales yet.</td></tr>{% endfor %}</tbody>
+        </table></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>Low-stock alerts</h2><span class="muted">Restock priority</span></div>
+        <div class="table-wrap"><table class="data compact">
+          <thead><tr><th>Product</th><th>Seller</th><th>Stock</th></tr></thead>
+          <tbody>{% for row in low_stock %}<tr><td>{{ row.product }}<span class="muted">{{ row.category }}</span></td><td>{{ row.seller }}</td><td><span class="status-badge status-pending">{{ row.stock }} / {{ row.threshold }}</span></td></tr>{% empty %}<tr><td colspan="3" class="muted">All stock levels are healthy.</td></tr>{% endfor %}</tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Revenue by period</h2>
+        <div class="toolbar toolbar-inline">
+          <a class="chip {% if period == 'day' %}chip-active{% endif %}" href="?period=day">Daily</a>
+          <a class="chip {% if period == 'week' %}chip-active{% endif %}" href="?period=week">Weekly</a>
+          <a class="chip {% if period == 'month' %}chip-active{% endif %}" href="?period=month">Monthly</a>
+          <a class="chip {% if period == 'year' %}chip-active{% endif %}" href="?period=year">Yearly</a>
+        </div>
+      </div>
+      <div class="table-wrap"><table class="data compact">
+        <thead><tr><th>Period</th><th>Orders</th><th>Revenue</th></tr></thead>
+        <tbody>{% for row in revenue_rows %}<tr><td>{{ row.period|slice:":10" }}</td><td>{{ row.orders }}</td><td>UGX {{ row.revenue|floatformat:0 }}</td></tr>{% empty %}<tr><td colspan="3" class="muted">No revenue in this period.</td></tr>{% endfor %}</tbody>
+      </table></div>
+    </div>
+  </section>
+{% endblock %}
+{% block scripts %}
+  {{ revenue_labels|json_script:"revenue-labels" }}
+  {{ revenue_values|json_script:"revenue-values" }}
+  {{ category_labels|json_script:"category-labels" }}
+  {{ category_values|json_script:"category-values" }}
+  <script src="{% static 'js/chart.umd.min.js' %}"></script>
+  <script>
+    (function () {
+      const read = (id) => JSON.parse(document.getElementById(id).textContent);
+      new Chart(document.getElementById('revenueChart'), {
+        type: 'line',
+        data: { labels: read('revenue-labels'), datasets: [{ label: 'Revenue (UGX)', data: read('revenue-values'), borderColor: '#245c46', backgroundColor: 'rgba(36,92,70,.12)', fill: true, tension: .35, pointRadius: 3 }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { callback: (v) => 'UGX ' + v.toLocaleString() } } } }
+      });
+      new Chart(document.getElementById('categoryChart'), {
+        type: 'doughnut',
+        data: { labels: read('category-labels'), datasets: [{ data: read('category-values'), backgroundColor: ['#245c46','#3c7a5e','#6b9a7b','#9ab79a','#c4d4b4','#d7ecb0','#b8a06a'], borderWidth: 2, borderColor: '#fff' }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } } }
+      });
+    })();
+  </script>
+{% endblock %}

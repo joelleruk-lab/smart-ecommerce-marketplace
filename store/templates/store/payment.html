@@ -1,0 +1,36 @@
+{% extends 'store/base.html' %}
+{% block title %}Pay for {{ order.reference }} · Rukomeza Market{% endblock %}
+{% block content %}
+  <section class="wrap page-section">
+    <div class="page-title"><span class="eyebrow">SECURE TEST-MODE PAYMENT</span><h1>Complete your payment</h1><p>Order {{ order.reference }} · created {{ order.created_at|date:"M j, Y · g:i a" }}</p></div>
+    <div class="payment-layout">
+      <div class="payment-card">
+        <div class="mock-gateway-head">
+          <span class="gateway-logo">MOCK<span>PAY</span></span>
+          <span class="test-mode-pill">TEST MODE · NO REAL CHARGE</span>
+        </div>
+        <div class="payment-amount">UGX {{ order.total_amount|floatformat:0 }}</div>
+        <p class="muted">Reference {{ order.payment.transaction_ref|default:"—" }}</p>
+        {% if order.status == 'PENDING' %}
+          <p>Choose the result you want the gateway to return. Both paths are recorded on the payment and reflected in the order timeline.</p>
+          <form method="post" class="payment-actions">{% csrf_token %}
+            <button class="button button-dark button-wide" type="submit" name="outcome" value="success">Pay successfully · simulate approval</button>
+            <button class="button button-outline button-wide" type="submit" name="outcome" value="failure">Simulate a declined payment</button>
+          </form>
+          <p class="muted small">This project uses a documented mock gateway. The same interface can be swapped for Stripe, Paystack or Flutterwave test keys; see <code>docs/PAYMENTS.md</code>.</p>
+        {% else %}
+          <div class="notice notice-info">This order is {{ order.get_status_display|lower }}. Payment is no longer requested.</div>
+          <a class="button button-dark" href="{% url 'order_detail' order.pk %}">View order & tracking</a>
+        {% endif %}
+      </div>
+      <aside class="order-summary">
+        <h2>What you are paying for</h2>
+        {% for item in items %}<div class="summary-row"><span>{{ item.quantity }} × {{ item.product_name_snapshot }}</span><strong>UGX {{ item.line_total|floatformat:0 }}</strong></div>{% endfor %}
+        <div class="summary-row"><span>Subtotal</span><strong>UGX {{ order.subtotal|floatformat:0 }}</strong></div>
+        <div class="summary-row"><span>Shipping</span><strong>UGX {{ order.shipping_fee|floatformat:0 }}</strong></div>
+        <div class="summary-row summary-total"><span>Total</span><strong>UGX {{ order.total_amount|floatformat:0 }}</strong></div>
+        <p>Payment status: <strong>{{ order.payment.get_status_display|default:"—" }}</strong></p>
+      </aside>
+    </div>
+  </section>
+{% endblock %}

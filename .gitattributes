@@ -1,0 +1,15 @@
+* text=auto
+
+# Deployment scripts must keep Unix line endings on Linux hosts.
+*.sh text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+Dockerfile text eol=lf
+Procfile text eol=lf
+*.py text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.js text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.svg text eol=lf

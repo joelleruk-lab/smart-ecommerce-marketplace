@@ -1,0 +1,81 @@
+{% extends 'store/base.html' %}
+{% block title %}Seller studio · {{ seller.store_name }}{% endblock %}
+{% block content %}
+  <section class="wrap page-section">
+    <div class="page-title"><span class="eyebrow">SELLER STUDIO</span><h1>{{ seller.store_name }}</h1><p>{{ seller.store_description|default:"Manage your catalogue, stock and orders." }}</p></div>
+
+    {% if not seller.is_approved %}
+      <div class="notice notice-info">Your seller application is awaiting administrator approval. You can prepare your store, but listings stay hidden until approved.</div>
+    {% elif seller.is_suspended %}
+      <div class="notice notice-error">This store is suspended. Contact marketplace support for help.</div>
+    {% endif %}
+
+    <div class="stat-grid">
+      <div class="stat-card"><span class="stat-label">Live listings</span><strong>{{ summary.products }}</strong><small>{{ products|length }} total</small></div>
+      <div class="stat-card"><span class="stat-label">Orders</span><strong>{{ summary.orders }}</strong><small>{{ summary.units_sold }} units sold</small></div>
+      <div class="stat-card"><span class="stat-label">Revenue</span><strong class="stat-money">UGX {{ summary.revenue|floatformat:0 }}</strong><small>Paid, shipped & delivered</small></div>
+      <div class="stat-card {% if summary.low_stock %}stat-warn{% endif %}"><span class="stat-label">Low stock</span><strong>{{ summary.low_stock }}</strong><small>Needs restocking</small></div>
+      <div class="stat-card"><span class="stat-label">Rating</span><strong>{% if summary.rating %}{{ summary.rating|floatformat:1 }} ★{% else %}—{% endif %}</strong><small>Verified reviews</small></div>
+    </div>
+
+    <div class="studio-grid">
+      <div class="panel">
+        <div class="panel-head"><h2>Add a product</h2><span class="muted">Listings go live instantly</span></div>
+        <form method="post" action="{% url 'seller_product_create' %}" enctype="multipart/form-data" class="stacked-form">
+          {% csrf_token %}
+          {% for field in form %}
+            <div class="field-row"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{% for error in field.errors %}<span class="form-error">{{ error }}</span>{% endfor %}</div>
+          {% endfor %}
+          <button class="button button-dark" type="submit">Publish product</button>
+        </form>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>Your products</h2><a class="subtle-link" href="{% url 'seller_orders' %}">View orders →</a></div>
+        <div class="table-wrap"><table class="data compact">
+          <thead><tr><th>Product</th><th>Price</th><th>Stock</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            {% for product in products %}
+              <tr class="{% if not product.is_active %}row-muted{% endif %}">
+                <td><strong>{{ product.name }}</strong><span class="muted">{{ product.category.name }} · {{ product.sku }}</span></td>
+                <td>UGX {{ product.price|floatformat:0 }}</td>
+                <td>
+                  <form method="post" action="{% url 'seller_stock_update' product.pk %}" class="stock-form">{% csrf_token %}
+                    <input type="number" name="stock_quantity" min="0" value="{{ product.stock_quantity|default:0 }}" aria-label="Stock for {{ product.name }}">
+                    <button type="submit">Save</button>
+                  </form>
+                </td>
+                <td>{% if not product.is_active %}<span class="status-badge status-cancelled">Inactive</span>{% elif product.stock_quantity == 0 %}<span class="status-badge status-cancelled">Out of stock</span>{% elif product.stock_quantity <= product.low_stock_threshold %}<span class="status-badge status-pending">Low stock</span>{% else %}<span class="status-badge status-paid">Live</span>{% endif %}</td>
+                <td class="row-actions">
+                  <a class="subtle-link" href="{% url 'seller_product_edit' product.pk %}">Edit</a>
+                  <form method="post" action="{% url 'seller_product_toggle' product.pk %}" class="inline-form">{% csrf_token %}<button class="text-button" type="submit">{% if product.is_active %}Deactivate{% else %}Activate{% endif %}</button></form>
+                </td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="5" class="muted">No products yet. Publish your first listing using the form.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <div class="studio-grid">
+      <div class="panel">
+        <div class="panel-head"><h2>Recent orders</h2><a class="subtle-link" href="{% url 'seller_orders' %}">All orders →</a></div>
+        {% for order in orders %}
+          <div class="list-row">
+            <div><strong>{{ order.reference }} · {{ order.customer.username }}</strong><span class="muted">{{ order.created_at|date:"M j, Y" }} · {{ order.items.count }} line{{ order.items.count|pluralize }}</span></div>
+            <div class="list-row-end"><strong>UGX {{ order.total_amount|floatformat:0 }}</strong><span class="status-badge status-{{ order.status|lower }}">{{ order.get_status_display }}</span></div>
+          </div>
+        {% empty %}<p class="muted">No orders yet. Orders appear here once customers buy your products.</p>{% endfor %}
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>Low stock alerts</h2></div>
+        {% for row in low_stock %}
+          <div class="list-row"><div><strong>{{ row.product }}</strong><span class="muted">{{ row.category }}</span></div><span class="status-badge status-pending">{{ row.stock }} left</span></div>
+        {% empty %}<p class="muted">No low-stock products.</p>{% endfor %}
+        <p class="muted small">Alerts use each product's low-stock threshold.</p>
+      </div>
+    </div>
+  </section>
+{% endblock %}

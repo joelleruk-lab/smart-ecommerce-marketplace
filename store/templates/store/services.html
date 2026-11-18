@@ -1,0 +1,23 @@
+{% extends 'store/base.html' %}
+{% load static %}
+{% block title %}How it works · Rukomeza Market{% endblock %}
+{% block content %}
+  <section class="services-hero">
+    <div class="wrap"><span class="eyebrow">THE LOCAL WAY TO SHOP</span><h1>One marketplace.<br><em>Many local stories.</em></h1><p>Rukomeza brings Kampala's independent shops together so you can discover, compare and order from one place.</p><a class="button button-light" href="{% url 'shop' %}">Explore the marketplace →</a></div>
+  </section>
+  <section class="wrap page-section">
+    <div class="section-heading"><div><span class="eyebrow">HOW WE HELP</span><h2>Built for buyers and sellers</h2></div></div>
+    <div class="service-grid">
+      <article class="service-card"><span>01</span><h3>Find more in one place</h3><p>Browse independent shops and departments, then search by product name, category or store.</p></article>
+      <article class="service-card"><span>02</span><h3>Local stores, real inventory</h3><p>Each product belongs to a seller storefront and is linked to its own stock count.</p></article>
+      <article class="service-card"><span>03</span><h3>Clear order details</h3><p>Your basket saves product and quantity selections. Orders preserve the price shown when you checked out.</p></article>
+      <article class="service-card"><span>04</span><h3>Made for Kampala</h3><p>Prices are shown in Ugandan shillings, with delivery details collected at checkout.</p></article>
+    </div>
+    <div class="section-heading department-heading"><div><span class="eyebrow">WHAT YOU'LL FIND</span><h2>Explore our departments</h2></div></div>
+    <div class="category-pills">
+      {% for category in categories %}<a class="category-pill" href="{% url 'shop' %}?category={{ category.slug|urlencode }}"><span>{{ category.icon|default:"✦" }}</span>{{ category.name }}</a>
+      {% empty %}<p class="muted">Marketplace categories will appear here.</p>{% endfor %}
+    </div>
+    <div class="seller-banner services-seller-banner"><div class="seller-banner-row"><div><span class="eyebrow">FOR LOCAL BUSINESSES</span><h2>Bring your store online</h2><p>Create a seller account and apply to list your products.</p></div><a class="button button-light" href="{% url 'register' %}">Become a seller →</a></div></div>
+  </section>
+{% endblock %}

@@ -1,0 +1,43 @@
+{% extends 'store/base.html' %}
+{% block title %}Sellers · Admin · Rukomeza Market{% endblock %}
+{% block content %}
+  <section class="wrap page-section">
+    <div class="admin-head">
+      <div class="page-title"><span class="eyebrow">VENDORS</span><h1>Seller management</h1><p>Approve new stores, suspend policy breaches and reinstate resolved cases.</p></div>
+      <div class="admin-nav">
+        <a class="chip" href="{% url 'admin_dashboard' %}">Overview</a>
+        <a class="chip" href="{% url 'admin_users' %}">Users</a>
+        <a class="chip chip-active" href="{% url 'admin_sellers' %}">Sellers</a>
+      </div>
+    </div>
+    <div class="toolbar">
+      <a class="chip {% if not selected_status %}chip-active{% endif %}" href="{% url 'admin_sellers' %}">All</a>
+      <a class="chip {% if selected_status == 'PENDING' %}chip-active{% endif %}" href="?status=PENDING">Pending</a>
+      <a class="chip {% if selected_status == 'APPROVED' %}chip-active{% endif %}" href="?status=APPROVED">Approved</a>
+      <a class="chip {% if selected_status == 'SUSPENDED' %}chip-active{% endif %}" href="?status=SUSPENDED">Suspended</a>
+    </div>
+    <div class="panel">
+      <div class="table-wrap"><table class="data">
+        <thead><tr><th>Store</th><th>Owner</th><th>Products</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody>
+          {% for seller in sellers %}
+            <tr>
+              <td><strong>{{ seller.store_name }}</strong><span class="muted">{{ seller.store_description|truncatechars:60 }}</span></td>
+              <td>{{ seller.user.username }}<span class="muted">{{ seller.user.email }}</span></td>
+              <td>{{ seller.products.count }}</td>
+              <td><span class="status-badge status-{% if seller.is_suspended %}cancelled{% elif seller.is_approved %}paid{% else %}pending{% endif %}">{{ seller.status|title }}</span></td>
+              <td class="row-actions">
+                <form method="post" action="{% url 'admin_seller_action' seller.pk %}" class="inline-form">{% csrf_token %}
+                  {% if not seller.is_approved and not seller.is_suspended %}<button class="button button-dark button-small" name="action" value="approve" type="submit">Approve</button>
+                  {% elif seller.is_suspended %}<button class="button button-outline button-small" name="action" value="reinstate" type="submit">Reinstate</button>
+                  {% else %}<button class="text-button" name="action" value="suspend" type="submit">Suspend</button>{% endif %}
+                  {% if not seller.is_approved %}<button class="text-button" name="action" value="reject" type="submit">Reject</button>{% endif %}
+                </form>
+              </td>
+            </tr>
+          {% empty %}<tr><td colspan="5" class="muted">No sellers in this view.</td></tr>{% endfor %}
+        </tbody>
+      </table></div>
+    </div>
+  </section>
+{% endblock %}
