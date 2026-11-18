@@ -73,6 +73,14 @@ working mock payment flow.
 
 ## Quick start
 
+### Windows — double-click
+
+After the one-time setup below, just double-click **`run_local.bat`**. It
+migrates, seeds the demo data, starts the server and opens
+<http://127.0.0.1:8000/>.
+
+### Manual setup
+
 ```bash
 # 1. Create and activate a virtual environment
 python -m venv venv
@@ -96,7 +104,8 @@ python manage.py seed_demo
 python manage.py runserver
 ```
 
-Open <http://127.0.0.1:8000/>.
+Open <http://127.0.0.1:8000/>. A detailed French guide is available in
+[docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md).
 
 ### Demo accounts (created by `seed_demo`)
 
